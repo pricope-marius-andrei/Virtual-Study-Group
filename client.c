@@ -60,9 +60,9 @@ int main (int argc, char *argv[])
     return errno;
   }
 
-  //Enter the email
+  //Enter the email/password
   bzero (msg, 100);
-  printf ("[client]Enter your email: ");
+  printf ("[client]Enter your email/password ('/'- delimitator):");
   fflush (stdout);
   if(read (0, msg, 100) <= 0)
   {
@@ -70,7 +70,7 @@ int main (int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
   
-  //Send email
+  //Send email/password
   if (write (socket_fd, msg, 100) <= 0)
   {
     perror ("[client]Eroare la write() spre server.\n");

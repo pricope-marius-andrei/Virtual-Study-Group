@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <string.h>
+#include "utils/db.h"
 
 #define PORT 1025
 char email[100];
@@ -26,20 +27,6 @@ struct response
     int status;
     char message[100];
 };
-
-char * conv_addr (struct sockaddr_in address)
-{
-  static char str[25];
-  char port[7];
-
-  /* adresa IP a clientului */
-  strcpy (str, inet_ntoa (address.sin_addr));	
-  /* portul utilizat de client */
-  bzero (port, 7);
-  sprintf (port, ":%d", ntohs (address.sin_port));	
-  strcat (str, port);
-  return (str);
-}
 
 int setup_socket()
 {
@@ -80,11 +67,25 @@ int setup_socket()
     return socket_fd;
 }
 
+void update_active_list(int client, fd_set *active_fds, int *nfds)
+{
+    //Ajust the maximum number of descriptors
+    if (*nfds < client) 
+        *nfds = client;
+            
+    //Active list updated with new client
+    FD_SET (client, active_fds);
+
+    printf("[SERVER] The client with the descriptor %d was connected\n",client);
+    fflush (stdout);
+}
+
 int logIn(int fd, char email[100])
 {
     struct response resp;
     char responseToClient[100];
     char buffer[100];
+    char password[100];
     int bytes;
     if ((bytes = read (fd, buffer, sizeof(buffer))) < 0)
     {
@@ -92,9 +93,12 @@ int logIn(int fd, char email[100])
         exit(EXIT_FAILURE);
     }
 
-    strcpy(email,buffer);
+    //Split the buffer in email/password
 
-    printf ("[server]The email was received:%s", email);
+    strcpy(email,strtok(buffer,"/"));
+    strcpy(password,strtok(NULL,"/\n"));
+
+    printf ("[SERVER]The email was received:%s\n", email);
         
     /*Succesfull response */
     bzero(responseToClient,100);
@@ -107,7 +111,7 @@ int logIn(int fd, char email[100])
         
     if (bytes && write(fd, &resp, sizeof(resp)) <0)
     {
-        perror ("[server] The response was not send.\n");
+        perror ("[SERVER] The response was not send.\n");
         exit(EXIT_FAILURE);
     }
     
@@ -131,64 +135,49 @@ int main()
 
     int nfds = socket_fd;
 
-    printf ("[SERVER] Asteptam la portul %d...\n", PORT);
-
-    struct timeval tv;
-
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
+    printf ("[SERVER] The server wait at %d port...\n", PORT);
 
     while (1)
     {
-        /* ajustam multimea descriptorilor activi (efectiv utilizati) */
+        //Copy the readable descriptors to active descriptors
         bcopy ((char *) &active_fds, (char *) &read_fds, sizeof (read_fds));
 
-        /* apelul select() */
-        if (select (nfds+1, &read_fds, NULL, NULL, &tv) < 0)
+        if (select (nfds+1, &read_fds, NULL, NULL, NULL) < 0)
         {
-            perror ("[server] Eroare la select().\n");
+            perror ("[SERVER] select() error.\n");
         }
-        /* vedem daca e pregatit socketul pentru a-i accepta pe clienti */
+
         if (FD_ISSET (socket_fd, &read_fds))
         {
-            /* pregatirea structurii client */
             int len = sizeof (client_addr);
             bzero (&client_addr, sizeof (client_addr));
 
-            /* a venit un client, acceptam conexiunea */
+            // Accept the connection with a client
             int client = accept (socket_fd, (struct sockaddr *) &client_addr, &len);
 
-            /* eroare la acceptarea conexiunii de la un client */
             if (client < 0)
             {
-                perror ("[server] Eroare la accept().\n");
+                perror ("[SERVER] accept() error\n");
                 continue;
             }
 
-            if (nfds < client) /* ajusteaza valoarea maximului */
-                nfds = client;
-                    
-            /* includem in lista de descriptori activi si acest socket */
-            FD_SET (client, &active_fds);
-
-            printf("[server] S-a conectat clientul cu descriptorul %d, de la adresa %s.\n",client, conv_addr (client_addr));
-            fflush (stdout);
+            update_active_list(client,&active_fds,&nfds);
         }
-        /* vedem daca e pregatit vreun socket client pentru a trimite raspunsul */
-        for (int fd = 0; fd <= nfds; fd++)	/* parcurgem multimea de descriptori */
+        //Verify if exist some socket ready to send the credentials
+        for (int fd = 0; fd <= nfds; fd++)
         {
-            /* este un socket de citire pregatit? */
+            //Verify if exist some socket ready to read
             if (fd != socket_fd && FD_ISSET (fd, &read_fds))
             {	
                 if (logIn(fd,email))
                 {
-                    printf ("[server] S-a deconectat clientul cu descriptorul %d.\n",fd);
+                    printf ("[SERVER] S-a deconectat clientul cu descriptorul %d.\n",fd);
                     fflush (stdout);
                     close (fd);		/* inchidem conexiunea cu clientul */
                     FD_CLR (fd, &active_fds);/* scoatem si din multime */
                 }
             }
-        }			/* for */
-    }				/* while */
+        }
+    }
     printf("Ok!");
 }
