@@ -1,2 +1,2 @@
-*.exe
+.gcc-outputs
 /.vscode
