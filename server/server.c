@@ -17,16 +17,9 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <string.h>
-#include "utils/db.h"
+#include "../utils/db.h"
+#include "../utils/constants.h"
 
-#define PORT 1025
-char username[100];
-
-struct response
-{
-    int status;
-    char message[100];
-};
 
 int setup_socket()
 {
@@ -80,66 +73,86 @@ void update_active_list(int client, fd_set *active_fds, int *nfds)
     fflush (stdout);
 }
 
-int log_in(int fd, char username[100], sqlite3 *db)
+int manage_communication(int fd, fd_set *read_fds, int nfds, int socket_fd, sqlite3 *db)
 {
     struct response resp;
+    struct communication data;
     char responseToClient[100];
-    char buffer[100];
     char password[100];
+    char username[100];
     int bytes;
-    if ((bytes = read (fd, buffer, sizeof(buffer))) < 0)
+    if ((bytes = read (fd, &data, sizeof(data))) < 0)
     {
-        perror ("The username was not read\n");
+        perror ("The data from client was not read\n");
         exit(EXIT_FAILURE);
     }
 
-    //Split the buffer in username/password
+    if(data.communication_type == NOT_LOGGED) {
 
-    strcpy(username,strtok(buffer,"/"));
-    strcpy(password,strtok(NULL,"/\n"));
+        //Split the buffer in username/password
 
-    printf ("[SERVER]The username was received:%s\n", username);
+        strcpy(username,strtok(data.message,"/"));
+        strcpy(password,strtok(NULL,"/\n"));
 
-    //Verify if the user exist
-    int user_exist = verify_user_exist(db,username,password);
+        printf ("[SERVER]The username was received:%s\n", username);
 
-    //Exist - login
-    if(user_exist > 0)
-    {
-        
-        /*Succesfull response */
-        bzero(responseToClient,100);
-        strcpy(responseToClient,"Log-in successfully with username: ");
-        strcat(responseToClient,username);
+        //Verify if the user exist
+        int user_exist = verify_user_exist(db,username,password);
 
-        //Configure the response structure
-        strcpy(resp.message,responseToClient);
-        resp.status=1;
-
-        if (bytes && write(fd, &resp, sizeof(resp)) <0)
+        //Exist - login
+        if(user_exist > 0)
         {
-            perror ("[SERVER] The response was not send.\n");
-            exit(EXIT_FAILURE);
+            
+            /*Succesfull response */
+            bzero(responseToClient,100);
+            strcpy(responseToClient,"Welcome, ");
+            strcat(responseToClient,username);
+            strcat(responseToClient, "!");
+
+            //Configure the response structure
+            strcpy(resp.message,responseToClient);
+            resp.status=1;
+
+            if (bytes && write(fd, &resp, sizeof(resp)) <0)
+            {
+                perror ("[SERVER] The response was not send.\n");
+                exit(EXIT_FAILURE);
+            }
         }
-    }
-    //Doesn't exist - login
-    else 
-    {
-        bzero(responseToClient,100);
-        strcpy(responseToClient,"The user doesn't exist");
-
-        //Configure the response structure
-        strcpy(resp.message,responseToClient);
-        resp.status=0;
-
-        if(write(fd, &resp, sizeof(resp)) <0)
+        //Doesn't exist - login
+        else 
         {
-            perror ("[SERVER] The response was not send.\n");
-            exit(EXIT_FAILURE);
+            bzero(responseToClient,100);
+            strcpy(responseToClient,"The user doesn't exist");
+
+            //Configure the response structure
+            strcpy(resp.message,responseToClient);
+            resp.status=0;
+
+            if(write(fd, &resp, sizeof(resp)) <0)
+            {
+                perror ("[SERVER] The response was not send.\n");
+                exit(EXIT_FAILURE);
+            }
+
+        }
+        return bytes;
+    } else if(data.communication_type == LOGGED)
+    {
+        for (int file_desc = 5; file_desc <= nfds; file_desc++)
+        {
+            if(fd != socket_fd && file_desc != fd)
+            {
+                if(bytes && (write(file_desc,&data,sizeof(data)) < 0))
+                {
+                    perror("Write message error");
+                    exit(EXIT_FAILURE);
+                }
+            }
         }
 
+        return bytes;
     }
-    return bytes;
 }
 
 int main()
@@ -148,8 +161,6 @@ int main()
     char *errMsg = 0;
 
     int response = sqlite3_open("users.db",&db);
-
-    printf("%d\n", response);
 
     if(response)
     {
@@ -164,7 +175,7 @@ int main()
     // delete_account(db,"DROP TABLE USERS");
 
     // insert(db,"pricope", "parola1234");
-    // insert(db,"marius", "password1234");
+    // insert(db,"andrei", "password1234");
 
     // select_table(db, "SELECT * FROM USERS WHERE USERNAME='marius' AND PASSWORD='password1234';");
 
@@ -188,7 +199,7 @@ int main()
 
     while (1)
     {
-        //Copy the readable descriptors to active descriptors
+        //Copy the active descriptors to read descriptors
         bcopy ((char *) &active_fds, (char *) &read_fds, sizeof (read_fds));
 
         if (select (nfds+1, &read_fds, NULL, NULL, NULL) < 0)
@@ -212,18 +223,18 @@ int main()
 
             update_active_list(client,&active_fds,&nfds);
         }
-        //Verify if exist some socket ready to send the credentials
+        //Verify if exist some socket ready
         for (int fd = 0; fd <= nfds; fd++)
         {
             //Verify if exist some socket ready to read
             if (fd != socket_fd && FD_ISSET (fd, &read_fds))
             {	
-                if (log_in(fd,username,db))
+                if (manage_communication(fd,&read_fds,nfds, socket_fd,db))
                 {
-                    printf ("[SERVER] S-a deconectat clientul cu descriptorul %d.\n",fd);
+                    // printf ("[SERVER] S-a deconectat clientul cu descriptorul %d.\n",fd);
                     fflush (stdout);
-                    close (fd);		/* inchidem conexiunea cu clientul */
-                    FD_CLR (fd, &active_fds);/* scoatem si din multime */
+                    // close (fd);		/* inchidem conexiunea cu clientul */
+                    // FD_CLR (fd, &active_fds);/* scoatem si din multime */
                 }
             }
         }

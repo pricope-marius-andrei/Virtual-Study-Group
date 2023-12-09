@@ -8,18 +8,13 @@
 #include <netdb.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include "../utils/constants.h"
 
 /* codul de eroare returnat de anumite apeluri */
 extern int errno;
 
 int port;
-int isConnected = 0;
-
-struct response
-{
-    int status;
-    char message[100];
-};
+int is_connected = NOT_LOGGED;
 
 int main (int argc, char *argv[])
 {
@@ -59,38 +54,73 @@ int main (int argc, char *argv[])
     perror ("[client]Eroare la connect().\n");
     return errno;
   }
-
-  //Enter the email/password
-  bzero (msg, 100);
-  printf ("[client]Enter your email/password ('/'- delimitator):");
-  fflush (stdout);
-  if(read (0, msg, 100) <= 0)
-  {
-    perror("Reading email error");
-    exit(EXIT_FAILURE);
-  }
   
-  //Send email/password
-  if (write (socket_fd, msg, 100) <= 0)
-  {
-    perror ("[client]Eroare la write() spre server.\n");
-    return errno;
-  }
+  struct communication data;
 
-  struct response resp;
-  //read the server answer
-  if (read (socket_fd, &resp, sizeof(resp)) < 0)
+  while (1)
   {
-    perror ("[client]Eroare la read() de la server.\n");
-    return errno;
-  }
-  /* afisam mesajul primit */
-  printf ("[client]The response is: %s\n", resp.message);
+    if(is_connected == NOT_LOGGED) {
+      //Enter the email/password
+      bzero (msg, 100);
+      printf ("[client]Enter your email/password ('/'- delimitator):");
+      fflush (stdout);
+      if(read (0, msg, 100) <= 0)
+      {
+        perror("Reading email error");
+        exit(EXIT_FAILURE);
+      }
+      
+      data.communication_type = NOT_LOGGED;
+      strcpy(data.message,msg);
 
-  isConnected = resp.status;
-  if (isConnected)
-  {
-      printf("Yey, I'm log-in!\n");
+      //Send email/password
+      if (write (socket_fd, &data, sizeof(data)) <= 0)
+      {
+        perror ("[client]Eroare la write() spre server.\n");
+        return errno;
+      }
+
+      struct response resp;
+      //read the server answer
+      if (read (socket_fd, &resp, sizeof(resp)) < 0)
+      {
+        perror ("[client]Eroare la read() de la server.\n");
+        return errno;
+      }
+      /* afisam mesajul primit */
+      printf ("%s\n", resp.message);
+
+      is_connected = resp.status;
+    }
+    else if(is_connected == LOGGED)
+    {
+      int child = fork();
+
+      if(child == 0)
+      {
+        struct communication data;
+        int bytes = read(socket_fd,&data,sizeof(data));
+        if(bytes) {
+          printf("\nUSER:%s\n", data.message);
+        }
+      }
+      else 
+      {
+        bzero (msg, 100);
+        printf ("[client]Enter a message:");
+        fflush (stdout);
+        if(read (0, msg, 100) <= 0)
+        {
+          perror("Reading message error");
+          exit(EXIT_FAILURE);
+        }
+
+        printf("\n");
+        data.communication_type = LOGGED;
+        strcpy(data.message,msg);
+        write(socket_fd,&data,sizeof(data));
+      }
+    }
   }
   
   close(socket_fd);
