@@ -20,7 +20,7 @@
 #include "utils/db.h"
 
 #define PORT 1025
-char email[100];
+char username[100];
 
 struct response
 {
@@ -80,7 +80,7 @@ void update_active_list(int client, fd_set *active_fds, int *nfds)
     fflush (stdout);
 }
 
-int logIn(int fd, char email[100])
+int log_in(int fd, char username[100], sqlite3 *db)
 {
     struct response resp;
     char responseToClient[100];
@@ -89,37 +89,86 @@ int logIn(int fd, char email[100])
     int bytes;
     if ((bytes = read (fd, buffer, sizeof(buffer))) < 0)
     {
-        perror ("The email was not read\n");
+        perror ("The username was not read\n");
         exit(EXIT_FAILURE);
     }
 
-    //Split the buffer in email/password
+    //Split the buffer in username/password
 
-    strcpy(email,strtok(buffer,"/"));
+    strcpy(username,strtok(buffer,"/"));
     strcpy(password,strtok(NULL,"/\n"));
 
-    printf ("[SERVER]The email was received:%s\n", email);
-        
-    /*Succesfull response */
-    bzero(responseToClient,100);
-    strcpy(responseToClient,"Log-in successfully with email: ");
-    strcat(responseToClient,email);
+    printf ("[SERVER]The username was received:%s\n", username);
 
-    //Configure the response structure
-    strcpy(resp.message,responseToClient);
-    resp.status=1;
-        
-    if (bytes && write(fd, &resp, sizeof(resp)) <0)
+    //Verify if the user exist
+    int user_exist = verify_user_exist(db,username,password);
+
+    //Exist - login
+    if(user_exist > 0)
     {
-        perror ("[SERVER] The response was not send.\n");
-        exit(EXIT_FAILURE);
+        
+        /*Succesfull response */
+        bzero(responseToClient,100);
+        strcpy(responseToClient,"Log-in successfully with username: ");
+        strcat(responseToClient,username);
+
+        //Configure the response structure
+        strcpy(resp.message,responseToClient);
+        resp.status=1;
+
+        if (bytes && write(fd, &resp, sizeof(resp)) <0)
+        {
+            perror ("[SERVER] The response was not send.\n");
+            exit(EXIT_FAILURE);
+        }
     }
-    
+    //Doesn't exist - login
+    else 
+    {
+        bzero(responseToClient,100);
+        strcpy(responseToClient,"The user doesn't exist");
+
+        //Configure the response structure
+        strcpy(resp.message,responseToClient);
+        resp.status=0;
+
+        if(write(fd, &resp, sizeof(resp)) <0)
+        {
+            perror ("[SERVER] The response was not send.\n");
+            exit(EXIT_FAILURE);
+        }
+
+    }
     return bytes;
 }
 
 int main()
 {
+    sqlite3 *db; 
+    char *errMsg = 0;
+
+    int response = sqlite3_open("users.db",&db);
+
+    printf("%d\n", response);
+
+    if(response)
+    {
+        fprintf(stderr, "Error: %s\n", sqlite3_errmsg(db));
+    }
+
+    // create_table(db,"CREATE TABLE USERS("\
+    //     "USERNAME VARCHAR(36) PRIMARY KEY NOT NULL," \
+    //     "PASSWORD VARCHAR(36) NOT NULL);"\
+    // );
+
+    // delete_account(db,"DROP TABLE USERS");
+
+    // insert(db,"pricope", "parola1234");
+    // insert(db,"marius", "password1234");
+
+    // select_table(db, "SELECT * FROM USERS WHERE USERNAME='marius' AND PASSWORD='password1234';");
+
+
     //Setup the socket
     int socket_fd = setup_socket();
 
@@ -169,7 +218,7 @@ int main()
             //Verify if exist some socket ready to read
             if (fd != socket_fd && FD_ISSET (fd, &read_fds))
             {	
-                if (logIn(fd,email))
+                if (log_in(fd,username,db))
                 {
                     printf ("[SERVER] S-a deconectat clientul cu descriptorul %d.\n",fd);
                     fflush (stdout);
