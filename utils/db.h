@@ -57,7 +57,7 @@ void select_table(sqlite3 *db, char *query)
 
     int response = sqlite3_exec(db,query,display,(void*)data,&errMsg);
     if( response ) {
-        fprintf(stderr, "Error: %s\n", sqlite3_errmsg(db));
+        fprintf(stderr, "SELECT error: %s\n", sqlite3_errmsg(db));
         exit(EXIT_FAILURE);
     } 
     else {
@@ -94,7 +94,7 @@ int insert(sqlite3 *db, char *username, char *password)
 
     int response = sqlite3_exec(db,query,NULL,0,&errMsg);
     if( response ) {
-        fprintf(stderr, "Error: %s\n", sqlite3_errmsg(db));
+        fprintf(stderr, "Error : %s\n", sqlite3_errmsg(db));
     } 
     else {
         fprintf(stderr, "INSERT was succesfully executed\n");

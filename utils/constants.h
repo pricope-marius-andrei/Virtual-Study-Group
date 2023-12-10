@@ -1,6 +1,6 @@
 #define PORT 1025
 
-enum connection {NOT_LOGGED,LOGGED};
+enum connection {NOT_LOGGED,LOGGED,LOG_OUT};
 
 struct communication {
   int communication_type;

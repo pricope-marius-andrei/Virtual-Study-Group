@@ -73,7 +73,7 @@ void update_active_list(int client, fd_set *active_fds, int *nfds)
     fflush (stdout);
 }
 
-int manage_communication(int fd, fd_set *read_fds, int nfds, int socket_fd, sqlite3 *db)
+int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, int socket_fd, sqlite3 *db)
 {
     struct response resp;
     struct communication data;
@@ -81,6 +81,8 @@ int manage_communication(int fd, fd_set *read_fds, int nfds, int socket_fd, sqli
     char password[100];
     char username[100];
     int bytes;
+
+    //read a request from the clients
     if ((bytes = read (fd, &data, sizeof(data))) < 0)
     {
         perror ("The data from client was not read\n");
@@ -99,11 +101,10 @@ int manage_communication(int fd, fd_set *read_fds, int nfds, int socket_fd, sqli
         //Verify if the user exist
         int user_exist = verify_user_exist(db,username,password);
 
-        //Exist - login
+        //Exist-login
         if(user_exist > 0)
         {
-            
-            /*Succesfull response */
+            /*Succesfull response */ 
             bzero(responseToClient,100);
             strcpy(responseToClient,"Welcome, ");
             strcat(responseToClient,username);
@@ -113,7 +114,7 @@ int manage_communication(int fd, fd_set *read_fds, int nfds, int socket_fd, sqli
             strcpy(resp.message,responseToClient);
             resp.status=1;
 
-            if (bytes && write(fd, &resp, sizeof(resp)) <0)
+            if (bytes && (write(fd, &resp, sizeof(resp)) <0))
             {
                 perror ("[SERVER] The response was not send.\n");
                 exit(EXIT_FAILURE);
@@ -141,17 +142,23 @@ int manage_communication(int fd, fd_set *read_fds, int nfds, int socket_fd, sqli
     {
         for (int file_desc = 5; file_desc <= nfds; file_desc++)
         {
-            if(fd != socket_fd && file_desc != fd)
+            if(file_desc != fd && file_desc != socket_fd)
             {
                 if(bytes && (write(file_desc,&data,sizeof(data)) < 0))
                 {
-                    perror("Write message error");
-                    exit(EXIT_FAILURE);
+                    perror("[SERVER] The message was not send.\n");
                 }
             }
         }
 
         return bytes;
+    }
+    else if (data.communication_type == LOG_OUT)
+    {
+        printf ("[SERVER] S-a deconectat clientul cu descriptorul %d.\n",fd);
+        fflush (stdout);
+        close (fd);		/* inchidem conexiunea cu clientul */
+        FD_CLR (fd, active_fds);/* scoatem si din multime */
     }
 }
 
@@ -174,6 +181,7 @@ int main()
 
     // delete_account(db,"DROP TABLE USERS");
 
+    // insert(db,"marius", "password1234");
     // insert(db,"pricope", "parola1234");
     // insert(db,"andrei", "password1234");
 
@@ -206,6 +214,7 @@ int main()
         {
             perror ("[SERVER] select() error.\n");
         }
+        
 
         if (FD_ISSET (socket_fd, &read_fds))
         {
@@ -228,13 +237,10 @@ int main()
         {
             //Verify if exist some socket ready to read
             if (fd != socket_fd && FD_ISSET (fd, &read_fds))
-            {	
-                if (manage_communication(fd,&read_fds,nfds, socket_fd,db))
+            {
+                if (manage_communication(fd,&active_fds,&read_fds,nfds, socket_fd,db))
                 {
-                    // printf ("[SERVER] S-a deconectat clientul cu descriptorul %d.\n",fd);
-                    fflush (stdout);
-                    // close (fd);		/* inchidem conexiunea cu clientul */
-                    // FD_CLR (fd, &active_fds);/* scoatem si din multime */
+                    //to do
                 }
             }
         }

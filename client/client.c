@@ -56,8 +56,8 @@ int main (int argc, char *argv[])
   }
   
   struct communication data;
-
-  while (1)
+  int running = 1;
+  while (running)
   {
     if(is_connected == NOT_LOGGED) {
       //Enter the email/password
@@ -94,18 +94,46 @@ int main (int argc, char *argv[])
     }
     else if(is_connected == LOGGED)
     {
+
+      int pipe_fd[2];
+
+      
+      if(pipe(pipe_fd) == -1)
+      {
+        perror("Pipe error");
+        exit(EXIT_FAILURE);
+      } 
+
       int child = fork();
 
-      if(child == 0)
+      if(child)
       {
-        struct communication data;
-        int bytes = read(socket_fd,&data,sizeof(data));
-        if(bytes) {
-          printf("\nUSER:%s\n", data.message);
+        close(pipe_fd[1]);
+        int status;
+        read(pipe_fd[0],&status, sizeof(status));
+
+        if(status == 1) {
+          struct communication data;
+          int bytes = read(socket_fd,&data,sizeof(data));
+          if(bytes == -1)
+          {
+            perror("Reading error");
+            exit(EXIT_FAILURE);
+          }
+          if(bytes) {
+            printf("\nUSER:%s\n", data.message);
+          }
         }
+        else 
+        {
+          exit(EXIT_SUCCESS);
+        }
+
+        close(pipe_fd[0]);
       }
       else 
       {
+        close(pipe_fd[0]);
         bzero (msg, 100);
         printf ("[client]Enter a message:");
         fflush (stdout);
@@ -115,10 +143,28 @@ int main (int argc, char *argv[])
           exit(EXIT_FAILURE);
         }
 
-        printf("\n");
-        data.communication_type = LOGGED;
-        strcpy(data.message,msg);
-        write(socket_fd,&data,sizeof(data));
+        int status;
+        if(strcmp(msg,"close\n")==0)
+        {
+          printf("log-out");
+          strcpy(data.message,"log-out\n");
+          data.communication_type=LOG_OUT;
+          is_connected=NOT_LOGGED;
+          write(socket_fd,&data,sizeof(data));
+          status = 0;
+          write(pipe_fd[1],&status,sizeof(int));
+          running = 0;
+        }
+        else {
+          printf("\n");
+          data.communication_type = LOGGED;
+          strcpy(data.message,msg);
+          write(socket_fd,&data,sizeof(data));
+          status = 1;
+          write(pipe_fd[1],&status,sizeof(int));
+        }
+
+        close(pipe_fd[1]);
       }
     }
   }
