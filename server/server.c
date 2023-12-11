@@ -82,7 +82,7 @@ int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, 
     char username[100];
     int bytes;
 
-    //read a request from the clients
+    //Read a request from the client
     if ((bytes = read (fd, &data, sizeof(data))) < 0)
     {
         perror ("The data from client was not read\n");
@@ -90,43 +90,62 @@ int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, 
     }
 
     if(data.communication_type == NOT_LOGGED) {
-
         //Split the buffer in username/password
 
         strcpy(username,strtok(data.message,"/"));
         strcpy(password,strtok(NULL,"/\n"));
 
-        printf ("[SERVER]The username was received:%s\n", username);
+        printf ("[SERVER]The username was received:%s\n\n", username);
 
-        //Verify if the user exist
+        //Verify if the user exist in db
         int user_exist = verify_user_exist(db,username,password);
+        int logged_status;
 
         //Exist-login
         if(user_exist > 0)
         {
-            /*Succesfull response */ 
-            bzero(responseToClient,100);
-            strcpy(responseToClient,"Welcome, ");
-            strcat(responseToClient,username);
-            strcat(responseToClient, "!");
+            logged_status = get_logged_status(db,username);
+            printf("Logged_status: %d", logged_status);
+            if(logged_status == 0) {
+                // The user is logged
+                update_logged_status(db,username,password,"1");
 
-            //Configure the response structure
-            strcpy(resp.message,responseToClient);
-            resp.status=1;
 
-            if (bytes && (write(fd, &resp, sizeof(resp)) <0))
+                //Succesfull response 
+                bzero(responseToClient,100);
+                strcpy(responseToClient,"Welcome, ");
+                strcat(responseToClient,username);
+                strcat(responseToClient, "!");
+
+                //Configure the response structure
+                strcpy(resp.message,responseToClient);
+                resp.status=1;
+
+                if (bytes && (write(fd, &resp, sizeof(resp)) <0))
+                {
+                    perror ("[SERVER] The response was not send.\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            else 
             {
-                perror ("[SERVER] The response was not send.\n");
-                exit(EXIT_FAILURE);
+                bzero(responseToClient,100);
+                strcpy(responseToClient,"The user is logged");
+                strcpy(resp.message,responseToClient);
+                resp.status=0;
+
+                if(write(fd, &resp, sizeof(resp)) <0)
+                {
+                    perror ("[SERVER] The response was not send.\n");
+                    exit(EXIT_FAILURE);
+                }
             }
         }
-        //Doesn't exist - login
-        else 
-        {
+        else {
             bzero(responseToClient,100);
+           
+            //Doesn't exist
             strcpy(responseToClient,"The user doesn't exist");
-
-            //Configure the response structure
             strcpy(resp.message,responseToClient);
             resp.status=0;
 
@@ -135,23 +154,22 @@ int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, 
                 perror ("[SERVER] The response was not send.\n");
                 exit(EXIT_FAILURE);
             }
-
         }
         return bytes;
     } else if(data.communication_type == LOGGED)
     {
-        for (int file_desc = 5; file_desc <= nfds; file_desc++)
-        {
-            if(file_desc != fd && file_desc != socket_fd)
-            {
-                if(bytes && (write(file_desc,&data,sizeof(data)) < 0))
-                {
-                    perror("[SERVER] The message was not send.\n");
-                }
-            }
-        }
+        // for (int file_desc = 5; file_desc <= nfds; file_desc++)
+        // {
+        //     if(file_desc != fd && file_desc != socket_fd)
+        //     {
+        //         if(bytes && (write(file_desc,&data,sizeof(data)) < 0))
+        //         {
+        //             perror("[SERVER] The message was not send.\n");
+        //         }
+        //     }
+        // }
 
-        return bytes;
+        // return bytes;
     }
     else if (data.communication_type == LOG_OUT)
     {
@@ -175,17 +193,20 @@ int main()
     }
 
     // create_table(db,"CREATE TABLE USERS("\
-    //     "USERNAME VARCHAR(36) PRIMARY KEY NOT NULL," \
-    //     "PASSWORD VARCHAR(36) NOT NULL);"\
+    //     "ID INT PRIMARY KEY NOT NULL," \
+    //     "USERNAME VARCHAR(36) NOT NULL," \
+    //     "PASSWORD VARCHAR(36) NOT NULL," \
+    //     "STATUS INT NOT NULL," \
+    //     "ID_GROUP INT NULL);" \
     // );
 
     // delete_account(db,"DROP TABLE USERS");
 
-    // insert(db,"marius", "password1234");
-    // insert(db,"pricope", "parola1234");
-    // insert(db,"andrei", "password1234");
+    // insert_user(db,"0","marius", "password1234", "0", "NULL");
+    // insert_user(db,"1","pricope", "parola1234","0","NULL");
+    // insert_user(db,"2","andrei", "password1234","0","NULL");
 
-    // select_table(db, "SELECT * FROM USERS WHERE USERNAME='marius' AND PASSWORD='password1234';");
+    select_table(db, "SELECT * FROM USERS;");
 
 
     //Setup the socket
@@ -240,7 +261,7 @@ int main()
             {
                 if (manage_communication(fd,&active_fds,&read_fds,nfds, socket_fd,db))
                 {
-                    //to do
+                    
                 }
             }
         }

@@ -96,7 +96,6 @@ int main (int argc, char *argv[])
     {
 
       int pipe_fd[2];
-
       
       if(pipe(pipe_fd) == -1)
       {
@@ -110,25 +109,22 @@ int main (int argc, char *argv[])
       {
         close(pipe_fd[1]);
         int status;
-        read(pipe_fd[0],&status, sizeof(status));
-
-        if(status == 1) {
-          struct communication data;
-          int bytes = read(socket_fd,&data,sizeof(data));
-          if(bytes == -1)
-          {
-            perror("Reading error");
-            exit(EXIT_FAILURE);
-          }
-          if(bytes) {
-            printf("\nUSER:%s\n", data.message);
-          }
+        struct communication data;
+        int bytes = read(socket_fd,&data,sizeof(data));
+        if(bytes == -1)
+        {
+          perror("Reading error");
+          exit(EXIT_FAILURE);
         }
-        else 
+        if(bytes) {
+          printf("\nUSER:%s\n", data.message);
+        }
+
+        read(pipe_fd[0],&status, sizeof(status));
+        if(status == 0)
         {
           exit(EXIT_SUCCESS);
         }
-
         close(pipe_fd[0]);
       }
       else 
