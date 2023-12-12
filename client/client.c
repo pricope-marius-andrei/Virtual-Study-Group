@@ -140,7 +140,7 @@ int main (int argc, char *argv[])
         }
 
         int status;
-        if(strcmp(msg,"close\n")==0)
+        if(strcmp(msg,"log-out\n")==0)
         {
           printf("log-out");
           strcpy(data.message,"log-out\n");

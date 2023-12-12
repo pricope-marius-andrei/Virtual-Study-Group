@@ -130,7 +130,7 @@ int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, 
             else 
             {
                 bzero(responseToClient,100);
-                strcpy(responseToClient,"The user is logged");
+                strcpy(responseToClient,"The user is already logged");
                 strcpy(resp.message,responseToClient);
                 resp.status=0;
 
@@ -173,6 +173,7 @@ int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, 
     }
     else if (data.communication_type == LOG_OUT)
     {
+        update_logged_status(db,username,password,"0");
         printf ("[SERVER] S-a deconectat clientul cu descriptorul %d.\n",fd);
         fflush (stdout);
         close (fd);		/* inchidem conexiunea cu clientul */
