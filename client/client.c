@@ -9,12 +9,34 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include "../utils/constants.h"
+#include <pthread.h>
 
 /* codul de eroare returnat de anumite apeluri */
 extern int errno;
 
 int port;
 int is_connected = NOT_LOGGED;
+pthread_mutex_t lock; 
+struct communication data;
+
+//read data from the server
+void* read_message(void * socket_fd)
+{
+  pthread_mutex_lock(&lock);
+  int bytes = read(*(int *)socket_fd,&data,sizeof(data));
+ 
+  if(bytes == -1)
+  {
+    perror("Reading error");
+    exit(EXIT_FAILURE);
+  }
+  if(bytes) {
+    printf("USER:%s\n", data.message);
+  }
+  pthread_mutex_unlock(&lock);
+
+  return NULL;
+}
 
 int main (int argc, char *argv[])
 {
@@ -57,6 +79,9 @@ int main (int argc, char *argv[])
   
   struct communication data;
   int running = 1;
+
+  pthread_t th;
+
   while (running)
   {
     if(is_connected == NOT_LOGGED) {
@@ -94,76 +119,35 @@ int main (int argc, char *argv[])
     }
     else if(is_connected == LOGGED)
     {
+        pthread_create(&th,NULL,read_message,&socket_fd);
 
-      int pipe_fd[2];
-      
-      if(pipe(pipe_fd) == -1)
-      {
-        perror("Pipe error");
-        exit(EXIT_FAILURE);
-      } 
-
-      int child = fork();
-
-      if(child)
-      {
-        close(pipe_fd[1]);
-        int status;
-        struct communication data;
-        int bytes = read(socket_fd,&data,sizeof(data));
-        if(bytes == -1)
-        {
-          perror("Reading error");
-          exit(EXIT_FAILURE);
-        }
-        if(bytes) {
-          printf("\nUSER:%s\n", data.message);
-        }
-
-        read(pipe_fd[0],&status, sizeof(status));
-        if(status == 0)
-        {
-          exit(EXIT_SUCCESS);
-        }
-        close(pipe_fd[0]);
-      }
-      else 
-      {
-        close(pipe_fd[0]);
         bzero (msg, 100);
-        printf ("[client]Enter a message:");
-        fflush (stdout);
+        // printf ("[client]Enter a message:");
+        // fflush (stdout);
         if(read (0, msg, 100) <= 0)
         {
           perror("Reading message error");
           exit(EXIT_FAILURE);
         }
 
-        int status;
         if(strcmp(msg,"log-out\n")==0)
         {
           printf("log-out");
-          strcpy(data.message,"log-out\n");
+          strcpy(data.message,msg);
           data.communication_type=LOG_OUT;
           is_connected=NOT_LOGGED;
           write(socket_fd,&data,sizeof(data));
-          status = 0;
-          write(pipe_fd[1],&status,sizeof(int));
-          running = 0;
+          exit(EXIT_SUCCESS);
         }
-        else {
-          printf("\n");
-          data.communication_type = LOGGED;
+        else 
+        {
           strcpy(data.message,msg);
+          data.communication_type = LOGGED;
           write(socket_fd,&data,sizeof(data));
-          status = 1;
-          write(pipe_fd[1],&status,sizeof(int));
         }
 
-        close(pipe_fd[1]);
-      }
+        pthread_join(th,NULL);
     }
   }
-  
   close(socket_fd);
 }

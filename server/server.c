@@ -19,7 +19,17 @@
 #include <string.h>
 #include "../utils/db.h"
 #include "../utils/constants.h"
+#include <pthread.h>
 
+struct handle_data 
+{
+  int fd;
+  fd_set *active_fds;
+  fd_set *read_fds;
+  int nfds;
+  int socket_fd;
+  sqlite3 *db;
+};
 
 int setup_socket()
 {
@@ -73,7 +83,7 @@ void update_active_list(int client, fd_set *active_fds, int *nfds)
     fflush (stdout);
 }
 
-int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, int socket_fd, sqlite3 *db)
+int manage_communication(int fd, fd_set *active_fds, fd_set *read_fds, int nfds, int socket_fd, sqlite3 *db)
 {
     struct response resp;
     struct communication data;
@@ -158,18 +168,18 @@ int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, 
         return bytes;
     } else if(data.communication_type == LOGGED)
     {
-        // for (int file_desc = 5; file_desc <= nfds; file_desc++)
-        // {
-        //     if(file_desc != fd && file_desc != socket_fd)
-        //     {
-        //         if(bytes && (write(file_desc,&data,sizeof(data)) < 0))
-        //         {
-        //             perror("[SERVER] The message was not send.\n");
-        //         }
-        //     }
-        // }
+        for (int file_desc = 5; file_desc <= nfds; file_desc++)
+        {
+            if(file_desc != fd && file_desc != socket_fd)
+            {
+                if(bytes && (write(file_desc,&data,sizeof(data)) < 0))
+                {
+                    perror("[SERVER] The message was not send.\n");
+                }
+            }
+        }
 
-        // return bytes;
+        return bytes;
     }
     else if (data.communication_type == LOG_OUT)
     {
@@ -179,6 +189,13 @@ int manage_communication(int fd,fd_set *active_fds, fd_set *read_fds, int nfds, 
         close (fd);		/* inchidem conexiunea cu clientul */
         FD_CLR (fd, active_fds);/* scoatem si din multime */
     }
+}
+
+void* handle_connection(void *argc) 
+{
+    struct handle_data *hd = (struct handle_data *) argc;
+    manage_communication(hd->fd,hd->active_fds,hd->read_fds,hd->nfds,hd->socket_fd,hd->db);
+    return NULL;
 }
 
 int main()
@@ -206,6 +223,10 @@ int main()
     // insert_user(db,"0","marius", "password1234", "0", "NULL");
     // insert_user(db,"1","pricope", "parola1234","0","NULL");
     // insert_user(db,"2","andrei", "password1234","0","NULL");
+
+    update_logged_status(db,"pricope","parola1234", "0");
+    update_logged_status(db,"marius","password1234", "0");
+    update_logged_status(db,"andrei","password1234", "0");
 
     select_table(db, "SELECT * FROM USERS;");
 
@@ -260,10 +281,18 @@ int main()
             //Verify if exist some socket ready to read
             if (fd != socket_fd && FD_ISSET (fd, &read_fds))
             {
-                if (manage_communication(fd,&active_fds,&read_fds,nfds, socket_fd,db))
-                {
-                    
-                }
+                struct handle_data hd;
+
+                hd.fd = fd;
+                hd.active_fds = &active_fds;
+                hd.db = db;
+                hd.read_fds = &read_fds;
+                hd.nfds = nfds;
+                hd.socket_fd = socket_fd;
+
+                pthread_t th;
+
+                pthread_create(&th,NULL,handle_connection,&hd);
             }
         }
     }
