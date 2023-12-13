@@ -16,6 +16,10 @@ extern int errno;
 
 int port;
 int is_connected = NOT_LOGGED;
+int group_status = OUT_GROUP;
+char connect_group_status[2];
+int room_id = -1;
+
 pthread_mutex_t lock; 
 struct communication data;
 
@@ -119,34 +123,73 @@ int main (int argc, char *argv[])
     }
     else if(is_connected == LOGGED)
     {
-        pthread_create(&th,NULL,read_message,&socket_fd);
-
-        bzero (msg, 100);
-        // printf ("[client]Enter a message:");
-        // fflush (stdout);
-        if(read (0, msg, 100) <= 0)
+        if(group_status == OUT_GROUP)
         {
-          perror("Reading message error");
-          exit(EXIT_FAILURE);
-        }
+          printf("Enter (0)Create group/(1)Join group:");
+          fflush(stdout);
+          if(read(0,connect_group_status,sizeof(connect_group_status))==-1)
+          {
+            perror("Reading connect_group_status error");
+          }
 
-        if(strcmp(msg,"log-out\n")==0)
-        {
-          printf("log-out");
-          strcpy(data.message,msg);
-          data.communication_type=LOG_OUT;
-          is_connected=NOT_LOGGED;
-          write(socket_fd,&data,sizeof(data));
-          exit(EXIT_SUCCESS);
-        }
-        else 
-        {
-          strcpy(data.message,msg);
-          data.communication_type = LOGGED;
-          write(socket_fd,&data,sizeof(data));
-        }
+          printf("connect_group_status: %s", connect_group_status);
 
-        pthread_join(th,NULL);
+          if(atoi(connect_group_status) == CREATE_GROUP)
+          {
+            char group_info[100];
+            printf("Enter group name/password:");
+            if(read(0,group_info,sizeof(group_info))==-1)
+            {
+              perror("Reading group_info error");
+            }
+
+            printf("Group with name/password: %s was succesfuly created", group_info);
+            group_status = IN_GROUP;
+          }
+          else if (atoi(connect_group_status) == JOIN_GROUP)
+          {
+            char group_info[100];
+            printf("Enter group id/password:");
+            if(read(0,group_info,sizeof(group_info))==-1)
+            {
+              perror("Reading group_info error");
+            }
+
+            printf("Group with id/password: %s was succesfuly created", group_info);
+            group_status = IN_GROUP;
+          }
+  
+        }
+        else if(group_status == IN_GROUP) {
+          pthread_create(&th,NULL,read_message,&socket_fd);
+
+          bzero (msg, 100);
+          // printf ("[client]Enter a message:");
+          // fflush (stdout);
+          if(read (0, msg, 100) <= 0)
+          {
+            perror("Reading message error");
+            exit(EXIT_FAILURE);
+          }
+
+          if(strcmp(msg,"log-out\n")==0)
+          {
+            printf("log-out");
+            strcpy(data.message,msg);
+            data.communication_type=LOG_OUT;
+            is_connected=NOT_LOGGED;
+            write(socket_fd,&data,sizeof(data));
+            exit(EXIT_SUCCESS);
+          }
+          else 
+          {
+            strcpy(data.message,msg);
+            data.communication_type = LOGGED;
+            write(socket_fd,&data,sizeof(data));
+          }
+
+          pthread_join(th,NULL);
+        }
     }
   }
   close(socket_fd);
