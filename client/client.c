@@ -206,11 +206,25 @@ int main (int argc, char *argv[])
   
         }
         else if(group_status == IN_GROUP) {
-          pthread_create(&read_thread,NULL,read_message,&socket_fd);
-          pthread_create(&write_thread,NULL,write_message,&socket_fd);
 
-          pthread_join(read_thread,NULL);
-          pthread_join(write_thread,NULL);
+
+          char buffer[1024];
+          bzero(buffer,sizeof(buffer));
+
+          printf("Enter a message:");
+          fflush(stdout);
+          read(0,buffer,sizeof(buffer));
+          if(write(socket_fd,buffer, sizeof(buffer)) < 0)
+          {
+            perror("WRITING ERROR!");
+            exit(EXIT_FAILURE);
+          }
+
+          // pthread_create(&read_thread,NULL,read_message,&socket_fd);
+          // pthread_create(&write_thread,NULL,write_message,&socket_fd);
+
+          // pthread_join(read_thread,NULL);
+          // pthread_join(write_thread,NULL);
         }
     }
   }
