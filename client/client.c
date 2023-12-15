@@ -15,30 +15,72 @@
 extern int errno;
 
 int port;
-int is_connected = NOT_LOGGED;
-int group_status = OUT_GROUP;
+int is_connected = LOGGED;
+int group_status = IN_GROUP;
 char connect_group_status[2];
 int room_id = -1;
 
 pthread_mutex_t lock; 
 struct communication data;
 
+struct write_thread {
+  char msg[100];
+  int socket_fd;
+};
+
 //read data from the server
 void* read_message(void * socket_fd)
 {
-  pthread_mutex_lock(&lock);
-  int bytes = read(*(int *)socket_fd,&data,sizeof(data));
- 
-  if(bytes == -1)
+  while (1)
   {
-    perror("Reading error");
-    exit(EXIT_FAILURE);
+    int bytes = read(*(int *)socket_fd,&data,sizeof(data));
+ 
+    if(bytes == -1)
+    {
+      perror("Reading error");
+      exit(EXIT_FAILURE);
+    }
+    if(bytes) {
+      printf("USER:%s\n", data.message);
+      fflush(stdout);
+    }  
   }
-  if(bytes) {
-    printf("USER:%s\n", data.message);
-  }
-  pthread_mutex_unlock(&lock);
+  
+  return NULL;
+}
 
+void *write_message(void *fd)
+{
+  int *socket_fd = (int *)fd;
+
+  char msg[100];
+
+  while (1)
+  {
+  
+    bzero (msg, 100);
+    if(read (0, msg, 100) <= 0)
+    {
+      perror("Reading message error");
+      exit(EXIT_FAILURE);
+    }
+
+    if(strcmp(msg,"log-out\n")==0) 
+    {
+      printf("log-out");
+      strcpy(data.message,msg);
+      data.communication_type=LOG_OUT;
+      is_connected=NOT_LOGGED;
+      write(*socket_fd,&data,sizeof(data));
+      exit(EXIT_SUCCESS);
+    }
+    else 
+    {
+      strcpy(data.message,msg);
+      data.communication_type = LOGGED;
+      write(*socket_fd,&data,sizeof(data));
+    }
+  }
   return NULL;
 }
 
@@ -84,7 +126,11 @@ int main (int argc, char *argv[])
   struct communication data;
   int running = 1;
 
+  pthread_t read_thread;
+  pthread_t write_thread;
+
   pthread_t th;
+  pthread_t th_input;
 
   while (running)
   {
@@ -98,7 +144,6 @@ int main (int argc, char *argv[])
         perror("Reading email error");
         exit(EXIT_FAILURE);
       }
-      
       data.communication_type = NOT_LOGGED;
       strcpy(data.message,msg);
 
@@ -132,7 +177,7 @@ int main (int argc, char *argv[])
             perror("Reading connect_group_status error");
           }
 
-          printf("connect_group_status: %s", connect_group_status);
+          printf("connect_group_status: %d", atoi(connect_group_status));
 
           if(atoi(connect_group_status) == CREATE_GROUP)
           {
@@ -161,34 +206,11 @@ int main (int argc, char *argv[])
   
         }
         else if(group_status == IN_GROUP) {
-          pthread_create(&th,NULL,read_message,&socket_fd);
+          pthread_create(&read_thread,NULL,read_message,&socket_fd);
+          pthread_create(&write_thread,NULL,write_message,&socket_fd);
 
-          bzero (msg, 100);
-          // printf ("[client]Enter a message:");
-          // fflush (stdout);
-          if(read (0, msg, 100) <= 0)
-          {
-            perror("Reading message error");
-            exit(EXIT_FAILURE);
-          }
-
-          if(strcmp(msg,"log-out\n")==0)
-          {
-            printf("log-out");
-            strcpy(data.message,msg);
-            data.communication_type=LOG_OUT;
-            is_connected=NOT_LOGGED;
-            write(socket_fd,&data,sizeof(data));
-            exit(EXIT_SUCCESS);
-          }
-          else 
-          {
-            strcpy(data.message,msg);
-            data.communication_type = LOGGED;
-            write(socket_fd,&data,sizeof(data));
-          }
-
-          pthread_join(th,NULL);
+          pthread_join(read_thread,NULL);
+          pthread_join(write_thread,NULL);
         }
     }
   }

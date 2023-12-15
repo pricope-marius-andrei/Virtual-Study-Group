@@ -83,7 +83,7 @@ void update_active_list(int client, fd_set *active_fds, int *nfds)
     fflush (stdout);
 }
 
-int manage_communication(int fd, fd_set *active_fds, fd_set *read_fds, int nfds, int socket_fd, sqlite3 *db)
+int manage_communication(int fd, fd_set *active_fds, fd_set read_fds, int nfds, int socket_fd, sqlite3 *db)
 {
     struct response resp;
     struct communication data;
@@ -168,10 +168,11 @@ int manage_communication(int fd, fd_set *active_fds, fd_set *read_fds, int nfds,
         return bytes;
     } else if(data.communication_type == LOGGED)
     {
-        for (int file_desc = 5; file_desc <= nfds; file_desc++)
+        for (int file_desc = 0; file_desc <= nfds; file_desc++)
         {
-            if(file_desc != fd && file_desc != socket_fd)
+            if(file_desc != fd && file_desc != socket_fd && FD_ISSET(file_desc,&read_fds))
             {
+                printf("Clientul %d trimite mesaj care clientul %d\n", fd, file_desc);
                 if(bytes && (write(file_desc,&data,sizeof(data)) < 0))
                 {
                     perror("[SERVER] The message was not send.\n");
@@ -188,13 +189,14 @@ int manage_communication(int fd, fd_set *active_fds, fd_set *read_fds, int nfds,
         fflush (stdout);
         close (fd);		/* inchidem conexiunea cu clientul */
         FD_CLR (fd, active_fds);/* scoatem si din multime */
+        FD_CLR (fd, &read_fds);
     }
 }
 
 void* handle_connection(void *argc) 
 {
     struct handle_data *hd = (struct handle_data *) argc;
-    manage_communication(hd->fd,hd->active_fds,hd->read_fds,hd->nfds,hd->socket_fd,hd->db);
+    manage_communication(hd->fd,hd->active_fds,*hd->read_fds,hd->nfds,hd->socket_fd,hd->db);
     return NULL;
 }
 
@@ -224,11 +226,11 @@ int main()
     // insert_user(db,"1","pricope", "parola1234","0","NULL");
     // insert_user(db,"2","andrei", "password1234","0","NULL");
 
-    update_logged_status(db,"pricope","parola1234", "0");
-    update_logged_status(db,"marius","password1234", "0");
-    update_logged_status(db,"andrei","password1234", "0");
+    // update_logged_status(db,"pricope","parola1234", "0");
+    // update_logged_status(db,"marius","password1234", "0");
+    // update_logged_status(db,"andrei","password1234", "0");
 
-    select_table(db, "SELECT * FROM USERS;");
+    // select_table(db, "SELECT * FROM USERS;");
 
 
     //Setup the socket
@@ -246,27 +248,39 @@ int main()
 
     int nfds = socket_fd;
 
+    struct timeval tv;		/* structura de timp pentru select() */
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+
+    if (listen(socket_fd,10) == -1)
+    {
+        perror("Listening error\n");
+        exit(EXIT_FAILURE);
+    }
+    
+
     printf ("[SERVER] The server wait at %d port...\n", PORT);
 
     while (1)
     {
         //Copy the active descriptors to read descriptors
         bcopy ((char *) &active_fds, (char *) &read_fds, sizeof (read_fds));
-
-        if (select (nfds+1, &read_fds, NULL, NULL, NULL) < 0)
+        // printf("S-a efectuat copierea\n");
+        if (select (nfds+1, &read_fds, NULL, NULL, &tv) < 0)
         {
             perror ("[SERVER] select() error.\n");
         }
-        
+        // printf("S-a executat select-ul\n");
 
         if (FD_ISSET (socket_fd, &read_fds))
         {
+            printf("Socket-ul este in lista descriptorilor de citire\n");
             int len = sizeof (client_addr);
             bzero (&client_addr, sizeof (client_addr));
 
             // Accept the connection with a client
             int client = accept (socket_fd, (struct sockaddr *) &client_addr, &len);
-
+            printf("Client accepted\n");
             if (client < 0)
             {
                 perror ("[SERVER] accept() error\n");
@@ -274,13 +288,24 @@ int main()
             }
 
             update_active_list(client,&active_fds,&nfds);
+            FD_SET(client,&read_fds);
+            printf("Clientul nou a fost adaugat la lista de descriptori de citire\n");
         }
+
+        
         //Verify if exist some socket ready
         for (int fd = 0; fd <= nfds; fd++)
         {
             //Verify if exist some socket ready to read
             if (fd != socket_fd && FD_ISSET (fd, &read_fds))
-            {
+            {   
+                printf("Am gasit descriptorul %d ca fiind gata de citire\n",fd);
+
+                if(manage_communication(fd,&active_fds,read_fds,nfds,socket_fd,db))
+                {
+
+                }
+
                 struct handle_data hd;
 
                 hd.fd = fd;
@@ -290,9 +315,9 @@ int main()
                 hd.nfds = nfds;
                 hd.socket_fd = socket_fd;
 
-                pthread_t th;
+                pthread_t *th = malloc(sizeof(pthread_t));
 
-                pthread_create(&th,NULL,handle_connection,&hd);
+                pthread_create(th,NULL,handle_connection,&hd);
             }
         }
     }
