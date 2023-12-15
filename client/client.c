@@ -220,6 +220,10 @@ int main (int argc, char *argv[])
             exit(EXIT_FAILURE);
           }
 
+          read(socket_fd,buffer,sizeof(buffer));
+          printf("Message from server: %s\n", buffer);
+          fflush(stdout);
+
           // pthread_create(&read_thread,NULL,read_message,&socket_fd);
           // pthread_create(&write_thread,NULL,write_message,&socket_fd);
 

@@ -2,7 +2,8 @@
 #define CLIENT_LISTENS 10
 
 struct client_connected {
-  int socket;
+  int server_socket;
+  int client_socket;
   struct sockaddr_in client_adress;
 };
 

@@ -21,16 +21,6 @@
 #include "../utils/constants.h"
 #include <pthread.h>
 
-// struct handle_data 
-// {
-//   int fd;
-//   fd_set *active_fds;
-//   fd_set *read_fds;
-//   int nfds;
-//   int socket_fd;
-//   sqlite3 *db;
-// };
-
 sqlite3* open_db(const char *file_path)
 {
     sqlite3* db;
@@ -85,25 +75,34 @@ int setup_socket()
     return socket_fd;
 }
 
-void *accepting_client(void *client_structure)
+void* communication_manager(void * client_socket)
 {
-    struct client_connected* client_conn = (struct client_connected*)client_structure;
-    int len = sizeof(struct sockaddr_in);
-    while (1)
-    {
-        printf("smth");
-        int client = accept (client_conn->socket, (struct sockaddr *) &client_conn->client_adress, &len);
-        if(client == -1)
-        {
-            perror("THE CLIENT DOESN'T ACCEPTED!");
-            exit(EXIT_FAILURE);
-        }
-        else 
-        {
-            printf("The client was accepted");
-            exit(EXIT_SUCCESS);
+    int client_socket_fd = *(int*)client_socket;
+    char buffer[1024];
+
+    int bytes;
+    while(1) {
+        if(client_socket_fd > 0) {
+            printf("client_socket_fd: %d", client_socket_fd);
+            bzero(buffer,sizeof(buffer));
+            if((bytes = read(client_socket_fd,buffer,sizeof(buffer)))<0)
+            {
+                perror("READING ERROR!");
+                exit(EXIT_FAILURE);
+            }
+
+            if(bytes > 0)
+            {
+                char buffer2[200];
+                strcpy(buffer2,buffer);
+                snprintf(buffer, sizeof(buffer), "I recieved message: %s", buffer2);
+                write(client_socket_fd,buffer,sizeof(buffer));
+            }
         }
     }
+    
+    
+    return NULL;
 }
 
 int main()
@@ -114,35 +113,19 @@ int main()
     //Setup the socket
     int server_socket_fd = setup_socket();
 
-    //The stucture for client address
-    struct sockaddr_in client_addr;
-
-
     printf("The server wait at port %d...\n", PORT);
-    
 
+    struct sockaddr_in client_address;
+    int len = sizeof(struct sockaddr_in);
+
+    pthread_t thread;
     while (1)
     {
+        int client = accept(server_socket_fd,(struct sockaddr *)&client_address,&len);
 
-        int len = sizeof(struct sockaddr_in);
-        int client = accept (server_socket_fd, (struct sockaddr *) &client_addr, &len);
-        if(client == -1)
-        {
-            perror("THE CLIENT DOESN'T ACCEPTED!");
-            exit(EXIT_FAILURE);
-        }
-
-        char buffer[1024];
-        if(read(client,buffer,sizeof(buffer))<0)
-        {
-            perror("READING ERROR!");
-            exit(EXIT_FAILURE);
-        }
-
-        printf("Message from client: %s", buffer);
-        fflush(stdout);
+        pthread_create(&thread,NULL,communication_manager, &client);
     }
-        
     
+    // connection_and_manage_communication(server_socket_fd);
     printf("Ok!");
 }
