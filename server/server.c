@@ -21,6 +21,9 @@
 #include "../utils/constants.h"
 #include <pthread.h>
 
+int client_fds[100];
+int client_fds_lenght = 0;
+
 sqlite3* open_db(const char *file_path)
 {
     sqlite3* db;
@@ -83,7 +86,6 @@ void* communication_manager(void * client_socket)
     int bytes;
     while(1) {
         if(client_socket_fd > 0) {
-            printf("client_socket_fd: %d", client_socket_fd);
             bzero(buffer,sizeof(buffer));
             if((bytes = read(client_socket_fd,buffer,sizeof(buffer)))<0)
             {
@@ -93,16 +95,25 @@ void* communication_manager(void * client_socket)
 
             if(bytes > 0)
             {
-                char buffer2[200];
-                strcpy(buffer2,buffer);
-                snprintf(buffer, sizeof(buffer), "I recieved message: %s", buffer2);
-                write(client_socket_fd,buffer,sizeof(buffer));
+                for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
+                {
+                    if(client_fds[client_fd] != client_socket_fd) {
+                        // printf("Main client %d and the other %d\n", client_socket_fd, client_fd);
+                        // printf("It works");
+                        write(client_fds[client_fd],buffer,sizeof(buffer));
+                    }
+                }
             }
         }
     }
-    
-    
+
     return NULL;
+}
+
+void update_fd_clients_list(int client_fd)
+{
+    client_fds[client_fds_lenght] = client_fd;
+    client_fds_lenght++;
 }
 
 int main()
@@ -122,10 +133,9 @@ int main()
     while (1)
     {
         int client = accept(server_socket_fd,(struct sockaddr *)&client_address,&len);
-
+        update_fd_clients_list(client);
         pthread_create(&thread,NULL,communication_manager, &client);
     }
-    
-    // connection_and_manage_communication(server_socket_fd);
+    close(server_socket_fd);
     printf("Ok!");
 }

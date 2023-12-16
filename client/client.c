@@ -31,19 +31,14 @@ struct write_thread {
 //read data from the server
 void* read_message(void * socket_fd)
 {
+  char buffer[1024];
   while (1)
   {
-    int bytes = read(*(int *)socket_fd,&data,sizeof(data));
- 
-    if(bytes == -1)
-    {
-      perror("Reading error");
-      exit(EXIT_FAILURE);
-    }
-    if(bytes) {
-      printf("USER:%s\n", data.message);
-      fflush(stdout);
-    }  
+    read(*(int *)socket_fd,buffer,sizeof(buffer));
+    printf("\nMessage from server: %s\n", buffer);
+    fflush(stdout);
+    printf("Enter a message:");
+    fflush(stdout);
   }
   
   return NULL;
@@ -129,9 +124,6 @@ int main (int argc, char *argv[])
   pthread_t read_thread;
   pthread_t write_thread;
 
-  pthread_t th;
-  pthread_t th_input;
-
   while (running)
   {
     if(is_connected == NOT_LOGGED) {
@@ -207,6 +199,7 @@ int main (int argc, char *argv[])
         }
         else if(group_status == IN_GROUP) {
 
+          pthread_create(&read_thread,NULL,read_message,&socket_fd);
 
           char buffer[1024];
           bzero(buffer,sizeof(buffer));
@@ -220,11 +213,6 @@ int main (int argc, char *argv[])
             exit(EXIT_FAILURE);
           }
 
-          read(socket_fd,buffer,sizeof(buffer));
-          printf("Message from server: %s\n", buffer);
-          fflush(stdout);
-
-          // pthread_create(&read_thread,NULL,read_message,&socket_fd);
           // pthread_create(&write_thread,NULL,write_message,&socket_fd);
 
           // pthread_join(read_thread,NULL);
