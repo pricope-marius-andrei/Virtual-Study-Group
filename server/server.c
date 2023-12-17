@@ -78,32 +78,115 @@ int setup_socket()
     return socket_fd;
 }
 
+struct request reaciving_request(int client_fd)
+{
+    struct request req;
+    int bytes;
+    if((bytes = read(client_fd,&req,sizeof(req)))<0)
+    {
+        perror("READING ERROR!");
+        exit(EXIT_FAILURE);
+    }
+
+    return req;
+}
+
+void sending_response(int client_fd, char *response, int response_status)
+{
+    struct response res;
+    strcpy(res.message,response);
+    res.status=response_status;
+
+    printf("Sending...\n");
+
+    if (strlen(res.message) && write(client_fd, &res, sizeof(res)) < 0)
+    {
+        perror ("THE RESPONSE HAS NOT SEND!\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
 void* communication_manager(void * client_socket)
 {
     int client_socket_fd = *(int*)client_socket;
-    char buffer[1024];
+    struct request req;
+    struct response res;
+    //Open db
+    sqlite3 *db = open_db("users.db"); 
 
     int bytes;
     while(1) {
         if(client_socket_fd > 0) {
-            bzero(buffer,sizeof(buffer));
-            if((bytes = read(client_socket_fd,buffer,sizeof(buffer)))<0)
-            {
-                perror("READING ERROR!");
-                exit(EXIT_FAILURE);
-            }
+            req = reaciving_request(client_socket_fd);
 
-            if(bytes > 0)
+            printf("Request: %s\n", req.message);
+
+            if(req.logging_status == NOT_LOGGED)
             {
-                for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
+                char username[1024];
+                char password[1024];
+                strcpy(username,strtok(req.message,"/"));
+                strcpy(password,strtok(NULL,"/\n"));
+
+                printf ("[SERVER]The username was received:%s\n\n", username);
+
+                //Verify if the user exist in db
+                int user_exist = verify_user_exist(db,username,password);
+                int logged_status;
+                char response_to_client[1024];
+
+                //Exist-login
+                if(user_exist > 0)
                 {
-                    if(client_fds[client_fd] != client_socket_fd) {
-                        // printf("Main client %d and the other %d\n", client_socket_fd, client_fd);
-                        // printf("It works");
-                        write(client_fds[client_fd],buffer,sizeof(buffer));
+                    logged_status = get_logged_status(db,username);
+                    if(logged_status == 0) {
+                        // The user is logged
+                        printf("User %s doesn't connected!\n", username);
+                        update_logged_status(db,username,password,"1");
+                        printf("The user was not logged %s", username);
+                        fflush(stdout);
+                        //Succesfull response 
+                        bzero(response_to_client,1024);
+                        strcpy(response_to_client,username);
+
+                        sending_response(client_socket_fd,response_to_client,SUCCESS);
+                    }
+                    else 
+                    {
+                        bzero(response_to_client,1024);
+                        strcpy(response_to_client,"The user already logged!\n");
+                        sending_response(client_socket_fd,response_to_client,FAILED);
+                    }
+                }
+                else {
+                
+                    //Doesn't exist
+                    bzero(response_to_client,1024);
+                    strcpy(response_to_client,"The user doesn't exist\n");
+                    sending_response(client_socket_fd,response_to_client,FAILED);
+                }
+            }
+            else if(req.logging_status == LOGGED)
+            {
+                if(req.group_status == OUT_GROUP)
+                {
+
+                }
+                else if (req.group_status == IN_GROUP)
+                {
+                    strcpy(res.message,req.message);
+                    res.status=1;
+                    for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
+                    {
+                        if(client_fds[client_fd] != client_socket_fd) {
+                        
+                            write(client_fds[client_fd],&res,sizeof(res));
+                        }
                     }
                 }
             }
+
+            
         }
     }
 
@@ -118,8 +201,26 @@ void update_fd_clients_list(int client_fd)
 
 int main()
 {
-    //Open db
+    //Test
     sqlite3 *db = open_db("users.db"); 
+
+    // create_table(db,"CREATE TABLE USERS("\
+    //     "ID INT PRIMARY KEY NOT NULL," \
+    //     "USERNAME VARCHAR(36) NOT NULL," \
+    //     "PASSWORD VARCHAR(36) NOT NULL," \
+    //     "STATUS INT NOT NULL," \
+    //     "ID_GROUP INT NULL);" \
+    // );
+
+    // delete_account(db,"DROP TABLE USERS");
+
+    update_logged_status(db,"pricope","parola1234", "0");
+    update_logged_status(db,"marius","password1234", "0");
+    update_logged_status(db,"andrei","password1234", "0");
+
+    select_table(db, "SELECT * FROM USERS;");
+    //Test
+
 
     //Setup the socket
     int server_socket_fd = setup_socket();

@@ -14,13 +14,14 @@ enum connection {NOT_LOGGED,LOGGED,OUT_GROUP,IN_GROUP,LOG_OUT};
 
 enum group {CREATE_GROUP,JOIN_GROUP};
 
-struct communication {
-  int communication_type;
-  char message[100];
+struct request {
+  int logging_status;
+  int group_status;
+  char message[1024];
 };
 
 struct response
 {
     int status;
-    char message[100];
+    char message[1024];
 };
