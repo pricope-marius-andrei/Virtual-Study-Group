@@ -81,13 +81,13 @@ int setup_socket()
 void* communication_manager(void * client_socket)
 {
     int client_socket_fd = *(int*)client_socket;
-    char buffer[1024];
+    struct request req;
+    struct response res;
 
     int bytes;
     while(1) {
         if(client_socket_fd > 0) {
-            bzero(buffer,sizeof(buffer));
-            if((bytes = read(client_socket_fd,buffer,sizeof(buffer)))<0)
+            if((bytes = read(client_socket_fd,&req,sizeof(req)))<0)
             {
                 perror("READING ERROR!");
                 exit(EXIT_FAILURE);
@@ -95,12 +95,13 @@ void* communication_manager(void * client_socket)
 
             if(bytes > 0)
             {
+                strcpy(res.message,req.message);
+                res.status=1;
                 for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
                 {
                     if(client_fds[client_fd] != client_socket_fd) {
-                        // printf("Main client %d and the other %d\n", client_socket_fd, client_fd);
-                        // printf("It works");
-                        write(client_fds[client_fd],buffer,sizeof(buffer));
+                       
+                        write(client_fds[client_fd],&res,sizeof(res));
                     }
                 }
             }
