@@ -12,7 +12,7 @@
 #include <pthread.h>
 
 int port;
-int is_connected = LOGGED;
+int is_connected = NOT_LOGGED;
 int group_status = IN_GROUP;
 char connect_group_status[2];
 int room_id = -1;
@@ -80,9 +80,22 @@ void sending_request(int socket_fd, int logging_status, int group_status, char *
   }
 }
 
+struct response recieving_response(int socket_fd)
+{
+  struct response resp;
+
+  if (read (socket_fd, &resp, sizeof(resp)) < 0)
+  {
+    perror ("read() ERROR!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  return resp;
+}
+
 int main (int argc, char *argv[])
 {
-  char msg[100];		// mesajul trimis
+  char msg[100];		//
 
   /* Connect parameters */
   if (argc != 3)
@@ -105,37 +118,33 @@ int main (int argc, char *argv[])
   {
     if(is_connected == NOT_LOGGED) {
 
-      
       // //Enter the email/password
-      // bzero (msg, 100);
-      // printf ("[client]Enter your email/password ('/'- delimitator):");
-      // fflush (stdout);
-      // if(read (0, msg, 100) <= 0)
-      // {
-      //   perror("Reading email error");
-      //   exit(EXIT_FAILURE);
-      // }
-      // data.communication_type = NOT_LOGGED;
-      // strcpy(data.message,msg);
+      bzero (msg, 100);
+      printf ("[client]Enter your email/password ('/'- delimitator):");
+      fflush (stdout);
 
-      // //Send email/password
-      // if (write (socket_fd, &data, sizeof(data)) <= 0)
-      // {
-      //   perror ("[client]Eroare la write() spre server.\n");
-      //   return errno;
-      // }
+      int bytes;
+      if((bytes = read (0, msg, 100)) < 0)
+      {
+        perror("READING ERROR");
+        exit(EXIT_FAILURE);
+      }
 
-      // struct response resp;
-      // //read the server answer
-      // if (read (socket_fd, &resp, sizeof(resp)) < 0)
-      // {
-      //   perror ("[client]Eroare la read() de la server.\n");
-      //   return errno;
-      // }
-      // /* afisam mesajul primit */
-      // printf ("%s\n", resp.message);
+      //Send the username and the password 
+      sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,msg);
 
-      // is_connected = resp.status;
+      //Recieving the response from the server
+      struct response resp = recieving_response(socket_fd);
+      
+      if(resp.status == 1)
+      {
+        printf("Welcome %s!\n", resp.message);
+        is_connected = LOGGED;
+      }
+      else 
+      {
+        printf("%s\n",resp.message);
+      }
     }
     else if(is_connected == LOGGED)
     {
@@ -187,6 +196,7 @@ int main (int argc, char *argv[])
           read(0,buffer,sizeof(buffer));
 
           sending_request(socket_fd,LOGGED,IN_GROUP,buffer);
+
         }
     }
   }
