@@ -149,13 +149,13 @@ void* communication_manager(void * client_socket)
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,username);
 
-                        sending_response(client_socket_fd,response_to_client,1);
+                        sending_response(client_socket_fd,response_to_client,SUCCESS);
                     }
                     else 
                     {
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,"The user already logged!\n");
-                        sending_response(client_socket_fd,response_to_client,0);
+                        sending_response(client_socket_fd,response_to_client,FAILED);
                     }
                 }
                 else {
@@ -163,7 +163,7 @@ void* communication_manager(void * client_socket)
                     //Doesn't exist
                     bzero(response_to_client,1024);
                     strcpy(response_to_client,"The user doesn't exist\n");
-                    sending_response(client_socket_fd,response_to_client,0);
+                    sending_response(client_socket_fd,response_to_client,FAILED);
                 }
             }
             else if(req.logging_status == LOGGED)
@@ -221,7 +221,7 @@ int main()
     select_table(db, "SELECT * FROM USERS;");
     //Test
 
-    
+
     //Setup the socket
     int server_socket_fd = setup_socket();
 
