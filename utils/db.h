@@ -8,6 +8,55 @@ int count_rows(void *data, int argc, char **argv, char **azColName)
     return 0;
 }
 
+int get_unique_id(sqlite3 *db)
+{
+    char *err_msg = 0;
+    char query[1024];
+    int id = 0;
+
+    strcpy(query,"SELECT * FROM GROUPS;");
+
+    int response = sqlite3_exec(db,query,count_rows,&id,&err_msg);
+
+    if(response)
+    {
+        perror("GET UNIQUE ID ERROR!");
+        exit(EXIT_FAILURE);
+    }
+
+    return id;
+}
+
+void create_group(sqlite3 *db, char *name, char *password)
+{
+    char *err_msg = 0;
+
+    char id[1024];
+    int unique_id = get_unique_id(db);
+    printf("Unique id: %d\n",unique_id);
+    sprintf(id, "%d", unique_id);
+
+    char query[1024];
+    strcpy(query,"INSERT INTO GROUPS (ID_GROUP,NAME,PASSWORD) VALUES('");
+    strcat(query,id);
+    strcat(query,"','");
+    strcat(query,name);
+    strcat(query,"','");
+    strcat(query,password);
+    strcat(query,"');");
+
+
+    printf("Query: %s\n", query);
+
+    int response = sqlite3_exec(db,query,NULL,0,&err_msg);
+
+    if(response)
+    {
+        perror("CREATE GROUP ERROR!");
+        exit(EXIT_FAILURE);
+    }
+}
+
 int verify_user_exist(sqlite3 *db, char* username ,char *password) 
 {
     char *errMsg = 0;

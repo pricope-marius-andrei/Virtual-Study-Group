@@ -9,13 +9,19 @@ struct client_connected {
 
 enum response_status {FAILED,SUCCESS};
 
-enum connection {NOT_LOGGED,LOGGED,OUT_GROUP,IN_GROUP,LOG_OUT};
+enum group_connection {CREATE_GROUP,JOIN_GROUP,NONE};
+enum group_status {OUT_GROUP,IN_GROUP};
 
-enum group {CREATE_GROUP,JOIN_GROUP};
+enum request_constants {NOT_LOGGED,LOGGED,LOG_OUT};
+
+struct group_info {
+  int group_status; //request_constants 
+  int group_connection; //group constants
+};
 
 struct request {
   int logging_status;
-  int group_status;
+  struct group_info gr_info;
   char message[1024];
 };
 

@@ -13,8 +13,7 @@
 
 int port;
 int is_connected = NOT_LOGGED;
-int group_status = IN_GROUP;
-char connect_group_status[2];
+int group_status = OUT_GROUP;
 int room_id = -1;
 
 struct write_thread {
@@ -67,11 +66,12 @@ void* read_message(void * socket_fd)
   return NULL;
 }
 
-void sending_request(int socket_fd, int logging_status, int group_status, char *buffer)
+void sending_request(int socket_fd, enum request_constants logging_status, enum group_status gr_status, enum group_connection gr_connection, char *buffer)
 {
   struct request req;
   req.logging_status = logging_status;
-  req.group_status = group_status;
+  req.gr_info.group_status = gr_status;
+  req.gr_info.group_connection = gr_connection;
   strcpy(req.message, buffer);
   if(write(socket_fd,&req, sizeof(req)) < 0)
   {
@@ -131,7 +131,7 @@ int main (int argc, char *argv[])
       }
 
       //Send the username and the password 
-      sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,msg);
+      sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,NONE,msg);
 
       //Recieving the response from the server
       struct response resp = recieving_response(socket_fd);
@@ -150,28 +150,32 @@ int main (int argc, char *argv[])
     {
         if(group_status == OUT_GROUP)
         {
+          
+          char connect_group_status[2];
           printf("Enter (0)Create group/(1)Join group:");
           fflush(stdout);
           if(read(0,connect_group_status,sizeof(connect_group_status))==-1)
           {
-            perror("Reading connect_group_status error");
+            perror("READING connect_group_status ERROR.");
           }
 
-          printf("connect_group_status: %d", atoi(connect_group_status));
+          char *group_connection = strtok(connect_group_status,"\n");
 
-          if(atoi(connect_group_status) == CREATE_GROUP)
+          if(atoi(group_connection) == CREATE_GROUP)
           {
             char group_info[100];
             printf("Enter group name/password:");
+            fflush(stdout);
+            
             if(read(0,group_info,sizeof(group_info))==-1)
             {
               perror("Reading group_info error");
             }
 
-            printf("Group with name/password: %s was succesfuly created", group_info);
+            sending_request(socket_fd,LOGGED,OUT_GROUP,CREATE_GROUP,group_info);
             group_status = IN_GROUP;
           }
-          else if (atoi(connect_group_status) == JOIN_GROUP)
+          else if (atoi(group_connection) == JOIN_GROUP)
           {
             char group_info[100];
             printf("Enter group id/password:");
@@ -183,7 +187,6 @@ int main (int argc, char *argv[])
             printf("Group with id/password: %s was succesfuly created", group_info);
             group_status = IN_GROUP;
           }
-  
         }
         else if(group_status == IN_GROUP) {
 
@@ -195,7 +198,7 @@ int main (int argc, char *argv[])
           fflush(stdout);
           read(0,buffer,sizeof(buffer));
 
-          sending_request(socket_fd,LOGGED,IN_GROUP,buffer);
+          sending_request(socket_fd,LOGGED,IN_GROUP,NONE,buffer);
 
         }
     }
