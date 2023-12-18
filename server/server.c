@@ -168,11 +168,29 @@ void* communication_manager(void * client_socket)
             }
             else if(req.logging_status == LOGGED)
             {
-                if(req.group_status == OUT_GROUP)
+                if(req.gr_info.group_status == OUT_GROUP)
                 {
+                    if(req.gr_info.group_connection == CREATE_GROUP)
+                    {
+                        char name[1024];
+                        char password[1024];
+                        strcpy(name,strtok(req.message,"/"));
+                        strcpy(password,strtok(NULL,"/\n"));
 
+                        printf("Group name: %s, password of group: %s\n",name,password);
+                        fflush(stdout);
+
+                        create_group(db,name,password);
+                        printf("The group was created succesfully!\n");
+                        fflush(stdout);
+                    }
+                    else if (req.gr_info.group_connection == JOIN_GROUP)
+                    {
+                        printf("The list of the groups:\n");
+                        fflush(stdout);
+                    }
                 }
-                else if (req.group_status == IN_GROUP)
+                else if (req.gr_info.group_status == IN_GROUP)
                 {
                     strcpy(res.message,req.message);
                     res.status=1;
@@ -204,12 +222,10 @@ int main()
     //Test
     sqlite3 *db = open_db("users.db"); 
 
-    // create_table(db,"CREATE TABLE USERS("\
-    //     "ID INT PRIMARY KEY NOT NULL," \
-    //     "USERNAME VARCHAR(36) NOT NULL," \
-    //     "PASSWORD VARCHAR(36) NOT NULL," \
-    //     "STATUS INT NOT NULL," \
-    //     "ID_GROUP INT NULL);" \
+    // create_table(db,"CREATE TABLE GROUPS("\
+    //     "ID_GROUP INT PRIMARY KEY NOT NULL," \
+    //     "NAME VARCHAR(36) NOT NULL," \
+    //     "PASSWORD VARCHAR(36) NOT NULL);"
     // );
 
     // delete_account(db,"DROP TABLE USERS");
@@ -218,7 +234,7 @@ int main()
     update_logged_status(db,"marius","password1234", "0");
     update_logged_status(db,"andrei","password1234", "0");
 
-    select_table(db, "SELECT * FROM USERS;");
+    select_table(db, "SELECT * FROM GROUPS;");
     //Test
 
 
