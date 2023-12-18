@@ -136,7 +136,7 @@ int main (int argc, char *argv[])
       //Recieving the response from the server
       struct response resp = recieving_response(socket_fd);
       
-      if(resp.status == 1)
+      if(resp.status == SUCCESS)
       {
         printf("Welcome %s!\n", resp.message);
         is_connected = LOGGED;

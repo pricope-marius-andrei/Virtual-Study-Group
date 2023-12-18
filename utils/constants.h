@@ -7,8 +7,7 @@ struct client_connected {
   struct sockaddr_in client_adress;
 };
 
-
-
+enum response_status {FAILED,SUCCESS};
 
 enum connection {NOT_LOGGED,LOGGED,OUT_GROUP,IN_GROUP,LOG_OUT};
 
