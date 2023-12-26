@@ -15,6 +15,7 @@ int port;
 int is_connected = NOT_LOGGED;
 int group_status = OUT_GROUP;
 int room_id = -1;
+int user_id = -1;
 
 struct write_thread {
   char msg[100];
@@ -69,6 +70,7 @@ void* read_message(void * socket_fd)
 void sending_request(int socket_fd, enum request_constants logging_status, enum group_status gr_status, enum group_connection gr_connection, char *buffer)
 {
   struct request req;
+  req.user_id = user_id;
   req.logging_status = logging_status;
   req.gr_info.group_status = gr_status;
   req.gr_info.group_connection = gr_connection;
@@ -109,10 +111,13 @@ int main (int argc, char *argv[])
   connect_to_server(socket_fd,argv[1],atoi(argv[2]));
   
   struct request req;
+  struct response res; 
+
   int running = 1;
 
   pthread_t read_thread;
   pthread_t write_thread;
+
 
   while (running)
   {
@@ -134,16 +139,17 @@ int main (int argc, char *argv[])
       sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,NONE,msg);
 
       //Recieving the response from the server
-      struct response resp = recieving_response(socket_fd);
+      res = recieving_response(socket_fd);
       
-      if(resp.status == SUCCESS)
+      if(res.status == SUCCESS)
       {
-        printf("Welcome %s!\n", resp.message);
+        printf("Welcome %s!\n", res.message);
         is_connected = LOGGED;
+        user_id = res.user_id;
       }
       else 
       {
-        printf("%s\n",resp.message);
+        printf("%s\n",res.message);
       }
     }
     else if(is_connected == LOGGED)
@@ -172,8 +178,19 @@ int main (int argc, char *argv[])
               perror("Reading group_info error");
             }
 
+
             sending_request(socket_fd,LOGGED,OUT_GROUP,CREATE_GROUP,group_info);
-            group_status = IN_GROUP;
+            
+            res = recieving_response(socket_fd);
+
+            if(res.status == SUCCESS)
+            {
+              group_status = IN_GROUP;
+            }
+            else 
+            {
+              printf("%s\n",res.message);
+            }
           }
           else if (atoi(group_connection) == JOIN_GROUP)
           {
