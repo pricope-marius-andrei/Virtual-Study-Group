@@ -27,7 +27,7 @@ int get_unique_id(sqlite3 *db)
     return id;
 }
 
-void create_group(sqlite3 *db, char *name, char *password)
+int create_group(sqlite3 *db, int admin_id, char *name, char *password)
 {
     char *err_msg = 0;
 
@@ -36,9 +36,14 @@ void create_group(sqlite3 *db, char *name, char *password)
     printf("Unique id: %d\n",unique_id);
     sprintf(id, "%d", unique_id);
 
+    char adm_id[1024];
+    sprintf(adm_id, "%d", admin_id);
+
     char query[1024];
-    strcpy(query,"INSERT INTO GROUPS (ID_GROUP,NAME,PASSWORD) VALUES('");
+    strcpy(query,"INSERT INTO GROUPS (ID_GROUP,ADMIN_ID,NAME,PASSWORD) VALUES('");
     strcat(query,id);
+    strcat(query,"','");
+    strcat(query,adm_id);
     strcat(query,"','");
     strcat(query,name);
     strcat(query,"','");
@@ -55,6 +60,8 @@ void create_group(sqlite3 *db, char *name, char *password)
         perror("CREATE GROUP ERROR!");
         exit(EXIT_FAILURE);
     }
+
+    return unique_id;
 }
 
 int verify_user_exist(sqlite3 *db, char* username ,char *password) 
@@ -141,17 +148,20 @@ int insert_user(sqlite3 *db, char* id , char *username, char *password, char* st
     return response;
 }
 
-void update_logged_status(sqlite3 *db, char *username, char *password, char*status) 
+void update_users_field(sqlite3 *db , char* field, int user_id, char*value_field) 
 {
     char *errMsg = 0;
     char query[254];
 
-    strcpy(query,"UPDATE USERS set STATUS=" );
-    strcat(query,status);
-    strcat(query," WHERE USERNAME='");
-    strcat(query,username);
-    strcat(query,"' AND PASSWORD='");
-    strcat(query,password);
+    char uid[1024];
+    sprintf(uid,"%d",user_id); 
+
+    strcpy(query,"UPDATE USERS set ");
+    strcat(query,field);
+    strcat(query,"=");
+    strcat(query,value_field);
+    strcat(query," WHERE ID='");
+    strcat(query,uid);
     strcat(query,"';");
 
     int response = sqlite3_exec(db,query,NULL,0,&errMsg);
@@ -169,14 +179,16 @@ int logged_status(void *data, int argc, char **argv, char **azColName)
     strcpy(status,(char*)data);
     return 0;
 }
-int get_logged_status(sqlite3 *db, char *username)
+int get_field_value(sqlite3 *db, char *username, const char* field)
 {
     sqlite3_stmt *stmt;
     char *errMsg = 0;
     char query[254];
     int status = -1;
 
-    strcpy(query,"SELECT STATUS FROM USERS WHERE USERNAME='");
+    strcpy(query,"SELECT ");
+    strcat(query,field);
+    strcat(query," FROM USERS WHERE USERNAME='");
     strcat(query,username);
     strcat(query,"';");
 

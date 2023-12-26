@@ -21,6 +21,7 @@ struct group_info {
 
 struct request {
   int logging_status;
+  int user_id;
   struct group_info gr_info;
   char message[1024];
 };
@@ -28,5 +29,12 @@ struct request {
 struct response
 {
     int status;
+    int user_id; //to set user_id in the client side
     char message[1024];
+};
+
+struct client 
+{
+  int group_id;
+  int fd;
 };

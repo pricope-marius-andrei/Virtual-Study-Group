@@ -21,7 +21,7 @@
 #include "../utils/constants.h"
 #include <pthread.h>
 
-int client_fds[100];
+struct client client_fds[100];
 int client_fds_lenght = 0;
 
 sqlite3* open_db(const char *file_path)
@@ -91,11 +91,12 @@ struct request reaciving_request(int client_fd)
     return req;
 }
 
-void sending_response(int client_fd, char *response, int response_status)
+void sending_response(int client_fd, int user_id, char *response, int response_status)
 {
     struct response res;
     strcpy(res.message,response);
     res.status=response_status;
+    res.user_id = user_id;
 
     printf("Sending...\n");
 
@@ -109,12 +110,16 @@ void sending_response(int client_fd, char *response, int response_status)
 void* communication_manager(void * client_socket)
 {
     int client_socket_fd = *(int*)client_socket;
+    int user_id = -1;
+    int group_id = -1;
     struct request req;
     struct response res;
     //Open db
     sqlite3 *db = open_db("users.db"); 
 
+    char response_to_client[1024];
     int bytes;
+
     while(1) {
         if(client_socket_fd > 0) {
             req = reaciving_request(client_socket_fd);
@@ -133,29 +138,30 @@ void* communication_manager(void * client_socket)
                 //Verify if the user exist in db
                 int user_exist = verify_user_exist(db,username,password);
                 int logged_status;
-                char response_to_client[1024];
 
                 //Exist-login
                 if(user_exist > 0)
                 {
-                    logged_status = get_logged_status(db,username);
+                    logged_status = get_field_value(db,username,"STATUS");
+                    printf("Status: %d\n",logged_status);
                     if(logged_status == 0) {
-                        // The user is logged
-                        printf("User %s doesn't connected!\n", username);
-                        update_logged_status(db,username,password,"1");
-                        printf("The user was not logged %s", username);
+                        update_users_field(db,"STATUS",user_id,"1");
+                        user_id = get_field_value(db,username, "ID");
+                        printf("User with id: %d was connected!\n",user_id);
+                        
+                        
                         fflush(stdout);
                         //Succesfull response 
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,username);
 
-                        sending_response(client_socket_fd,response_to_client,SUCCESS);
+                        sending_response(client_socket_fd,user_id,response_to_client,SUCCESS);
                     }
                     else 
                     {
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,"The user already logged!\n");
-                        sending_response(client_socket_fd,response_to_client,FAILED);
+                        sending_response(client_socket_fd,user_id,response_to_client,FAILED);
                     }
                 }
                 else {
@@ -163,7 +169,7 @@ void* communication_manager(void * client_socket)
                     //Doesn't exist
                     bzero(response_to_client,1024);
                     strcpy(response_to_client,"The user doesn't exist\n");
-                    sending_response(client_socket_fd,response_to_client,FAILED);
+                    sending_response(client_socket_fd,user_id,response_to_client,FAILED);
                 }
             }
             else if(req.logging_status == LOGGED)
@@ -180,8 +186,22 @@ void* communication_manager(void * client_socket)
                         printf("Group name: %s, password of group: %s\n",name,password);
                         fflush(stdout);
 
-                        create_group(db,name,password);
-                        printf("The group was created succesfully!\n");
+                        group_id = create_group(db,user_id,name,password);
+
+                        for (int i = 0; i < client_fds_lenght; i++)
+                        {
+                            if(client_fds[i].fd == client_socket_fd)
+                            {
+                                client_fds[i].group_id = group_id;
+                            }
+                        }
+                        
+
+                        update_users_field(db,"ADMIN",user_id,"1");
+                        
+
+                        strcpy(response_to_client,"The group was succesfully created!\n");
+                        sending_response(client_socket_fd,user_id,response_to_client,SUCCESS);
                         fflush(stdout);
                     }
                     else if (req.gr_info.group_connection == JOIN_GROUP)
@@ -196,9 +216,9 @@ void* communication_manager(void * client_socket)
                     res.status=1;
                     for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
                     {
-                        if(client_fds[client_fd] != client_socket_fd) {
+                        if(client_fds[client_fd].fd != client_socket_fd && client_fds[client_fd].group_id == group_id) {
                         
-                            write(client_fds[client_fd],&res,sizeof(res));
+                            write(client_fds[client_fd].fd,&res,sizeof(res));
                         }
                     }
                 }
@@ -213,7 +233,7 @@ void* communication_manager(void * client_socket)
 
 void update_fd_clients_list(int client_fd)
 {
-    client_fds[client_fds_lenght] = client_fd;
+    client_fds[client_fds_lenght].fd = client_fd;
     client_fds_lenght++;
 }
 
@@ -230,11 +250,11 @@ int main()
 
     // delete_account(db,"DROP TABLE USERS");
 
-    update_logged_status(db,"pricope","parola1234", "0");
-    update_logged_status(db,"marius","password1234", "0");
-    update_logged_status(db,"andrei","password1234", "0");
+    update_users_field(db,"STATUS",0, "0");
+    update_users_field(db,"STATUS",1, "0");
+    update_users_field(db,"STATUS",2, "0");
 
-    select_table(db, "SELECT * FROM GROUPS;");
+    // select_table(db, "SELECT * FROM GROUPS;");
     //Test
 
 
