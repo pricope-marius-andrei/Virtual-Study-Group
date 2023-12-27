@@ -67,13 +67,14 @@ void* read_message(void * socket_fd)
   return NULL;
 }
 
-void sending_request(int socket_fd, enum request_constants logging_status, enum group_status gr_status, enum group_connection gr_connection, char *buffer)
+void sending_request(int socket_fd, enum request_constants logging_status, enum group_status gr_status, enum group_connection gr_connection,int join_status, char *buffer)
 {
   struct request req;
   req.user_id = user_id;
   req.logging_status = logging_status;
   req.gr_info.group_status = gr_status;
   req.gr_info.group_connection = gr_connection;
+  req.join_group_status = join_status;
   strcpy(req.message, buffer);
   if(write(socket_fd,&req, sizeof(req)) < 0)
   {
@@ -136,7 +137,7 @@ int main (int argc, char *argv[])
       }
 
       //Send the username and the password 
-      sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,NONE,msg);
+      sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,NONE,-1,msg);
 
       //Recieving the response from the server
       res = recieving_response(socket_fd);
@@ -179,7 +180,7 @@ int main (int argc, char *argv[])
             }
 
 
-            sending_request(socket_fd,LOGGED,OUT_GROUP,CREATE_GROUP,group_info);
+            sending_request(socket_fd,LOGGED,OUT_GROUP,CREATE_GROUP,-1,group_info);
             
             res = recieving_response(socket_fd);
 
@@ -194,14 +195,11 @@ int main (int argc, char *argv[])
           }
           else if (atoi(group_connection) == JOIN_GROUP)
           {
-            char group_info[100];
-            printf("Enter group id/password:");
-            if(read(0,group_info,sizeof(group_info))==-1)
-            {
-              perror("Reading group_info error");
-            }
+            sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,GET_LIST,"");
 
-            printf("Group with id/password: %s was succesfuly created", group_info);
+            res = recieving_response(socket_fd);
+            printf("List of groups: \n %s \n", res.message);
+            fflush(stdout);
             group_status = IN_GROUP;
           }
         }
@@ -215,8 +213,7 @@ int main (int argc, char *argv[])
           fflush(stdout);
           read(0,buffer,sizeof(buffer));
 
-          sending_request(socket_fd,LOGGED,IN_GROUP,NONE,buffer);
-
+          sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,buffer);
         }
     }
   }

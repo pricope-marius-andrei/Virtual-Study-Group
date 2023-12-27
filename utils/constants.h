@@ -23,6 +23,7 @@ struct request {
   int logging_status;
   int user_id;
   struct group_info gr_info;
+  int join_group_status;
   char message[1024];
 };
 
@@ -32,6 +33,8 @@ struct response
     int user_id; //to set user_id in the client side
     char message[1024];
 };
+
+enum join_group {GET_LIST,SELECT_GROUP,JOIN};
 
 struct client 
 {

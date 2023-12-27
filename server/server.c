@@ -207,6 +207,26 @@ void* communication_manager(void * client_socket)
                     else if (req.gr_info.group_connection == JOIN_GROUP)
                     {
                         printf("The list of the groups:\n");
+                
+                        
+                        //get list of groups
+                        if(req.join_group_status == GET_LIST)
+                        {
+                            char *group_list = select_table(db,"SELECT * FROM GROUPS;");
+                            printf("Groups: %s", group_list);
+                            sending_response(client_socket_fd,user_id,group_list,SUCCESS);
+                        }
+                        //select a id_group
+                        else if (req.join_group_status == SELECT_GROUP)
+                        {
+
+                        }
+                        //enter password
+                        else if (req.join_group_status == JOIN_GROUP)
+                        {
+
+                        }
+
                         fflush(stdout);
                     }
                 }
@@ -254,7 +274,8 @@ int main()
     update_users_field(db,"STATUS",1, "0");
     update_users_field(db,"STATUS",2, "0");
 
-    // select_table(db, "SELECT * FROM GROUPS;");
+    // char*test = select_table(db, "SELECT * FROM GROUPS;");
+    // printf("List: %s", test);
     //Test
 
 
