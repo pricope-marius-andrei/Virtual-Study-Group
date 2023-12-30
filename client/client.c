@@ -14,7 +14,7 @@
 int port;
 int is_connected = NOT_LOGGED;
 int group_status = OUT_GROUP;
-int room_id = -1;
+int group_id = -1;
 int user_id = -1;
 
 struct write_thread {
@@ -71,6 +71,7 @@ void sending_request(int socket_fd, enum request_constants logging_status, enum 
 {
   struct request req;
   req.user_id = user_id;
+  req.group_id = group_id;
   req.logging_status = logging_status;
   req.gr_info.group_status = gr_status;
   req.gr_info.group_connection = gr_connection;
@@ -195,12 +196,61 @@ int main (int argc, char *argv[])
           }
           else if (atoi(group_connection) == JOIN_GROUP)
           {
+            //Print the list of the groups
             sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,GET_LIST,"");
 
             res = recieving_response(socket_fd);
             printf("List of groups: \n %s \n", res.message);
             fflush(stdout);
-            group_status = IN_GROUP;
+
+            //Select a group id
+            char id_group[100] = " \0";
+            
+
+            while (strcmp(id_group," ") == 0)
+            {
+              printf("Select a id group: ");
+              
+              fflush(stdout);
+              if(read(0,id_group,sizeof(id_group))==-1)
+              {
+                perror("Reading group_info error");
+              }
+
+              //to do 
+              //verify if the id_group exist
+              break;
+            }
+            
+
+            char group_info[1024];
+            id_group[strlen(id_group)-1] = '\0';
+
+
+            printf("Enter password for the group with %s id:", id_group);
+            fflush(stdout);
+            
+            char password[100];
+            if(read(0,password,sizeof(password))==-1)
+            {
+              perror("Reading group_info error");
+            }
+            sprintf(group_info,"%s/%s",id_group,password);
+
+            sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,SELECT_GROUP,group_info);
+
+            res = recieving_response(socket_fd);
+
+            if(res.status == SUCCESS)
+            {
+              printf("Welcome in %s group!\n", res.message);
+              group_status = IN_GROUP;
+              group_id = res.group_id;
+            }
+            else 
+            {
+              printf("%s\n",res.message);
+            }
           }
         }
         else if(group_status == IN_GROUP) {
@@ -209,7 +259,7 @@ int main (int argc, char *argv[])
 
           char buffer[1024];
           bzero(buffer,sizeof(buffer));
-          printf("Enter a message:");
+          printf("%d enter a message from %d group:", user_id,group_id);
           fflush(stdout);
           read(0,buffer,sizeof(buffer));
 

@@ -86,6 +86,28 @@ int verify_user_exist(sqlite3 *db, char* username ,char *password)
     return rows;
 }
 
+int verify_group_exist(sqlite3 *db, char* id_group ,char *password) 
+{
+    char *errMsg = 0;
+    char query[100];
+    int rows = 0;
+    strcpy(query,"SELECT * FROM GROUPS WHERE ID_GROUP='");
+    strcat(query,id_group);
+    strcat(query,"' AND PASSWORD='");
+    strcat(query,password);
+    strcat(query,"';");
+
+    int response = sqlite3_exec(db,query,count_rows,&rows, &errMsg);
+
+    if(response)
+    {
+        perror("Get rows count error");
+        exit(EXIT_FAILURE);
+    }
+
+    return rows;
+}
+
 void create_table(sqlite3 *db, char*query)
 {
     char *errMsg = 0;
@@ -193,7 +215,7 @@ void update_users_field(sqlite3 *db , char* field, int user_id, char*value_field
     }
 }
 
-int get_field_value(sqlite3 *db, char *username, const char* field)
+int get_field_value(sqlite3 *db, const char *condition, const char* field, const char* table_name)
 {
     sqlite3_stmt *stmt;
     char *errMsg = 0;
@@ -202,9 +224,13 @@ int get_field_value(sqlite3 *db, char *username, const char* field)
 
     strcpy(query,"SELECT ");
     strcat(query,field);
-    strcat(query," FROM USERS WHERE USERNAME='");
-    strcat(query,username);
-    strcat(query,"';");
+    strcat(query," FROM ");
+    strcat(query, table_name);
+    strcat(query, " ");
+    strcat(query,condition);
+    strcat(query,";");
+
+    printf("Query: %s\n", query);
 
     if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) == SQLITE_OK) {
         if (sqlite3_step(stmt) == SQLITE_ROW) {

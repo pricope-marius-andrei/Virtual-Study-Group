@@ -91,12 +91,13 @@ struct request reaciving_request(int client_fd)
     return req;
 }
 
-void sending_response(int client_fd, int user_id, char *response, int response_status)
+void sending_response(int client_fd, int user_id, int group_id, char *response, int response_status)
 {
     struct response res;
     strcpy(res.message,response);
     res.status=response_status;
     res.user_id = user_id;
+    res.group_id = group_id;
 
     printf("Sending...\n");
 
@@ -128,8 +129,8 @@ void* communication_manager(void * client_socket)
 
             if(req.logging_status == NOT_LOGGED)
             {
-                char username[1024];
-                char password[1024];
+                char username[100];
+                char password[100];
                 strcpy(username,strtok(req.message,"/"));
                 strcpy(password,strtok(NULL,"/\n"));
 
@@ -142,11 +143,12 @@ void* communication_manager(void * client_socket)
                 //Exist-login
                 if(user_exist > 0)
                 {
-                    logged_status = get_field_value(db,username,"STATUS");
-                    printf("Status: %d\n",logged_status);
+                    char condition[1024];
+                    sprintf(condition, "WHERE USERNAME='%s'", username);
+                    logged_status = get_field_value(db,condition,"STATUS","USERS");
                     if(logged_status == 0) {
                         update_users_field(db,"STATUS",user_id,"1");
-                        user_id = get_field_value(db,username, "ID");
+                        user_id = get_field_value(db,condition, "ID", "USERS");
                         printf("User with id: %d was connected!\n",user_id);
                         
                         
@@ -155,13 +157,13 @@ void* communication_manager(void * client_socket)
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,username);
 
-                        sending_response(client_socket_fd,user_id,response_to_client,SUCCESS);
+                        sending_response(client_socket_fd,user_id,-1,response_to_client,SUCCESS);
                     }
                     else 
                     {
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,"The user already logged!\n");
-                        sending_response(client_socket_fd,user_id,response_to_client,FAILED);
+                        sending_response(client_socket_fd,user_id,-1,response_to_client,FAILED);
                     }
                 }
                 else {
@@ -169,7 +171,7 @@ void* communication_manager(void * client_socket)
                     //Doesn't exist
                     bzero(response_to_client,1024);
                     strcpy(response_to_client,"The user doesn't exist\n");
-                    sending_response(client_socket_fd,user_id,response_to_client,FAILED);
+                    sending_response(client_socket_fd,user_id,-1,response_to_client,FAILED);
                 }
             }
             else if(req.logging_status == LOGGED)
@@ -188,11 +190,12 @@ void* communication_manager(void * client_socket)
 
                         group_id = create_group(db,user_id,name,password);
 
-                        for (int i = 0; i < client_fds_lenght; i++)
+
+                        for(int client_fd = 0 ; client_fd < client_fds_lenght + 1; client_fd++)
                         {
-                            if(client_fds[i].fd == client_socket_fd)
-                            {
-                                client_fds[i].group_id = group_id;
+                            if(client_fds[client_fd].fd == client_socket_fd ) {
+                                client_fds[client_fd].group_id = group_id;
+                                printf("Group id %d\n",client_fds[client_fd].group_id);
                             }
                         }
                         
@@ -201,7 +204,7 @@ void* communication_manager(void * client_socket)
                         
 
                         strcpy(response_to_client,"The group was succesfully created!\n");
-                        sending_response(client_socket_fd,user_id,response_to_client,SUCCESS);
+                        sending_response(client_socket_fd,user_id,-1,response_to_client,SUCCESS);
                         fflush(stdout);
                     }
                     else if (req.gr_info.group_connection == JOIN_GROUP)
@@ -214,11 +217,44 @@ void* communication_manager(void * client_socket)
                         {
                             char *group_list = select_table(db,"SELECT * FROM GROUPS;");
                             printf("Groups: %s", group_list);
-                            sending_response(client_socket_fd,user_id,group_list,SUCCESS);
+                            sending_response(client_socket_fd,user_id,-1,group_list,SUCCESS);
                         }
                         //select a id_group
                         else if (req.join_group_status == SELECT_GROUP)
                         {
+                            char id_group[1024];
+                            char password[1024];
+                            strcpy(id_group,strtok(req.message,"/"));
+                            strcpy(password,strtok(NULL,"/\n"));
+
+                            int group_exist = verify_group_exist(db,id_group,password);
+                            int logged_status;
+
+                            //Exist-login
+                            if(group_exist > 0)
+                            {
+                                fflush(stdout);
+                                //Succesfull response 
+                                bzero(response_to_client,1024);
+                                strcpy(response_to_client,id_group);
+                                sending_response(client_socket_fd,-1,atoi(id_group),response_to_client,SUCCESS);
+
+                                for(int client_fd = 0 ; client_fd < client_fds_lenght + 1; client_fd++)
+                                {
+                                    if(client_fds[client_fd].fd == client_socket_fd) {
+                                        client_fds[client_fd].group_id = atoi(id_group);
+                                        printf("Id group: %d\n",client_fds[client_fd].group_id);
+                                    }
+                                }
+                            }
+                            else 
+                            {
+                            
+                                //Doesn't exist
+                                bzero(response_to_client,1024);
+                                strcpy(response_to_client,"The group doesn't exist\n");
+                                sending_response(client_socket_fd,-1,-1,response_to_client,FAILED);
+                            }
 
                         }
                         //enter password
@@ -236,7 +272,7 @@ void* communication_manager(void * client_socket)
                     res.status=1;
                     for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
                     {
-                        if(client_fds[client_fd].fd != client_socket_fd && client_fds[client_fd].group_id == group_id) {
+                        if(client_fds[client_fd].fd != client_socket_fd && client_fds[client_fd].group_id==req.group_id) {
                         
                             write(client_fds[client_fd].fd,&res,sizeof(res));
                         }
