@@ -86,6 +86,28 @@ int verify_user_exist(sqlite3 *db, char* username ,char *password)
     return rows;
 }
 
+int verify_group_exist(sqlite3 *db, char* id_group ,char *password) 
+{
+    char *errMsg = 0;
+    char query[100];
+    int rows = 0;
+    strcpy(query,"SELECT * FROM GROUPS WHERE ID_GROUP='");
+    strcat(query,id_group);
+    strcat(query,"' AND PASSWORD='");
+    strcat(query,password);
+    strcat(query,"';");
+
+    int response = sqlite3_exec(db,query,count_rows,&rows, &errMsg);
+
+    if(response)
+    {
+        perror("Get rows count error");
+        exit(EXIT_FAILURE);
+    }
+
+    return rows;
+}
+
 void create_table(sqlite3 *db, char*query)
 {
     char *errMsg = 0;
@@ -96,28 +118,48 @@ void create_table(sqlite3 *db, char*query)
     }
 }
 
-static int display(void *NotUsed, int argc, char **argv, char **azColName) {
-   int i;
-   for(i = 0; i<argc; i++) {
-      printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-   }
-   printf("\n");
-   return 0;
-}
+// static int display(void *data, int argc, char **argv, char **azColName) {
+//    for(int i = 0; i<argc; i++) {
+//     char *line;
+//     sprintf(line,"%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+//     strcpy(data,line);
+//    }
+//    printf("\n");
+//    return 0;
+// }
 
-void select_table(sqlite3 *db, char *query)
+char* select_table(sqlite3 *db, char *query)
 {
+    struct sqlite3_stmt *stmt;
     char *errMsg = 0;
-    const char *data = "Result:\n";
+    char *data;
+    char current_data[1024]="";
 
-    int response = sqlite3_exec(db,query,display,(void*)data,&errMsg);
-    if( response ) {
-        fprintf(stderr, "SELECT error: %s\n", sqlite3_errmsg(db));
-        exit(EXIT_FAILURE);
-    } 
-    else {
-        fprintf(stderr, "SELECT was succesfully executed\n");
+    char line[100] = "";
+    if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) == SQLITE_OK) {
+        
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int columns_count = sqlite3_column_count(stmt);
+            for (int index = 0; index < 2; index++)
+            {
+                strcpy(line,sqlite3_column_name(stmt,index));
+                strcat(line, " = ");
+                strcat(line, sqlite3_column_text(stmt,index));
+                strcat(line, "\n");
+                strcat(current_data,line);
+            }
+            strcat(current_data, "\n");
+        }
+
+        sqlite3_finalize(stmt);
+    } else {
+        fprintf(stderr, "Error: %s\n", sqlite3_errmsg(db));
     }
+
+    data = (char*)malloc(strlen(current_data)+1);
+    strcpy(data,current_data);
+
+    return data;
 }
 
 int insert_user(sqlite3 *db, char* id , char *username, char *password, char* status, char *id_group)
@@ -173,13 +215,7 @@ void update_users_field(sqlite3 *db , char* field, int user_id, char*value_field
     }
 }
 
-int logged_status(void *data, int argc, char **argv, char **azColName)
-{
-    char status[100];
-    strcpy(status,(char*)data);
-    return 0;
-}
-int get_field_value(sqlite3 *db, char *username, const char* field)
+int get_field_value(sqlite3 *db, const char *condition, const char* field, const char* table_name)
 {
     sqlite3_stmt *stmt;
     char *errMsg = 0;
@@ -188,9 +224,13 @@ int get_field_value(sqlite3 *db, char *username, const char* field)
 
     strcpy(query,"SELECT ");
     strcat(query,field);
-    strcat(query," FROM USERS WHERE USERNAME='");
-    strcat(query,username);
-    strcat(query,"';");
+    strcat(query," FROM ");
+    strcat(query, table_name);
+    strcat(query, " ");
+    strcat(query,condition);
+    strcat(query,";");
+
+    printf("Query: %s\n", query);
 
     if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) == SQLITE_OK) {
         if (sqlite3_step(stmt) == SQLITE_ROW) {
