@@ -263,3 +263,19 @@ void delete_account(sqlite3 *db, char *query)
         fprintf(stderr, "DELETE was succesfully executed\n");
     }
 }
+
+void save_message(sqlite3 *db, int user_id, int group_id, char *message)
+{
+    char *errMsg = 0;
+    char query[254];
+
+    sprintf(query,"INSERT INTO MESSAGES (USER_ID,GROUP_ID,MESSAGE,DATE,TIME) VALUES('%d','%d','%s',date(),time());",user_id,group_id,message);
+
+    int response = sqlite3_exec(db,query,NULL,0,&errMsg);
+    if( response ) {
+        fprintf(stderr, "Error : %s\n", sqlite3_errmsg(db));
+    } 
+    else {
+        fprintf(stderr, "INSERT was succesfully executed\n");
+    }
+}

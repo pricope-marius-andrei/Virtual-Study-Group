@@ -57,10 +57,15 @@ void* read_message(void * socket_fd)
   struct response res;
   while (1)
   {
-    read(*(int *)socket_fd,&res,sizeof(res));
+    if(read(*(int *)socket_fd,&res,sizeof(res)) <= 0)
+    {
+      perror("\nError: The client was disconnected!");
+      exit(EXIT_FAILURE);
+    }
+    
     printf("\nMessage from server: %s\n", res.message);
     fflush(stdout);
-    printf("Enter a message:");
+    printf("%d enter a message from %d group:", user_id,group_id);
     fflush(stdout);
   }
   
@@ -187,6 +192,7 @@ int main (int argc, char *argv[])
 
             if(res.status == SUCCESS)
             {
+              group_id = res.group_id;
               group_status = IN_GROUP;
             }
             else 
@@ -261,7 +267,10 @@ int main (int argc, char *argv[])
           bzero(buffer,sizeof(buffer));
           printf("%d enter a message from %d group:", user_id,group_id);
           fflush(stdout);
-          read(0,buffer,sizeof(buffer));
+          if(read(0,buffer,sizeof(buffer)) <= 0)
+          {
+            exit(EXIT_FAILURE);
+          }
 
           sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,buffer);
         }
