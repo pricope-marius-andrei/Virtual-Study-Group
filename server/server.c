@@ -258,6 +258,7 @@ void* communication_manager(void * client_socket)
                                 bzero(response_to_client,1024);
                                 strcpy(response_to_client,id_group);
                                 sending_response(client_socket_fd,-1,atoi(id_group),response_to_client,SUCCESS);
+                                group_id = atoi(id_group);
 
                                 for(int client_fd = 0 ; client_fd < client_fds_lenght + 1; client_fd++)
                                 {
@@ -290,6 +291,8 @@ void* communication_manager(void * client_socket)
                 {
                     strcpy(res.message,req.message);
                     res.status=1;
+
+                    save_message(db,user_id,group_id,res.message);
                     for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
                     {
                         if(client_fds[client_fd].fd != client_socket_fd && client_fds[client_fd].group_id==req.group_id) {
