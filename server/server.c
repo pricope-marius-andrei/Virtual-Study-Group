@@ -24,6 +24,26 @@
 struct client client_fds[100];
 int client_fds_lenght = 0;
 
+void remove_client_fd(int client_fd)
+{
+    int remove_index = client_fds_lenght;
+    for (int i = 0; i < client_fds_lenght; i++)
+    {
+        if(client_fds[i].fd == client_fd)
+        {
+            remove_index = i;
+            break;
+        }
+    }
+
+    for (int i = remove_index; i < client_fds_lenght; i++)
+    {
+        client_fds[i] = client_fds[i+1];
+    }
+
+    client_fds_lenght--;
+}
+
 sqlite3* open_db(const char *file_path)
 {
     sqlite3* db;
@@ -82,10 +102,11 @@ struct request reaciving_request(int client_fd)
 {
     struct request req;
     int bytes;
-    if((bytes = read(client_fd,&req,sizeof(req)))<0)
+    if((bytes = read(client_fd,&req,sizeof(req))) <=0)
     {
-        perror("READING ERROR!");
-        exit(EXIT_FAILURE);
+        //remove the client fd from the list
+        remove_client_fd(client_fd);
+        strcpy(req.message,"false");
     }
 
     return req;
@@ -121,12 +142,12 @@ void* communication_manager(void * client_socket)
     char response_to_client[1024];
     int bytes;
 
+
     while(1) {
         if(client_socket_fd > 0) {
             req = reaciving_request(client_socket_fd);
 
-            printf("Request: %s\n", req.message);
-
+            // printf("Request: %s\n", req.message);
             if(req.logging_status == NOT_LOGGED)
             {
                 char username[100];
@@ -198,13 +219,12 @@ void* communication_manager(void * client_socket)
                                 printf("Group id %d\n",client_fds[client_fd].group_id);
                             }
                         }
-                        
 
                         update_users_field(db,"ADMIN",user_id,"1");
                         
 
                         strcpy(response_to_client,"The group was succesfully created!\n");
-                        sending_response(client_socket_fd,user_id,-1,response_to_client,SUCCESS);
+                        sending_response(client_socket_fd,user_id,group_id,response_to_client,SUCCESS);
                         fflush(stdout);
                     }
                     else if (req.gr_info.group_connection == JOIN_GROUP)
@@ -279,8 +299,6 @@ void* communication_manager(void * client_socket)
                     }
                 }
             }
-
-            
         }
     }
 
@@ -324,7 +342,7 @@ int main()
     int len = sizeof(struct sockaddr_in);
 
     pthread_t thread;
-    while (1)
+    while (server_socket_fd)
     {
         int client = accept(server_socket_fd,(struct sockaddr *)&client_address,&len);
         update_fd_clients_list(client);
