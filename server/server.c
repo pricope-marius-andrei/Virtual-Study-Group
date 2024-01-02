@@ -133,6 +133,7 @@ void* communication_manager(void * client_socket)
 {
     int client_socket_fd = *(int*)client_socket;
     int user_id = -1;
+    char username[100];
     int group_id = -1;
     struct request req;
     struct response res;
@@ -150,7 +151,6 @@ void* communication_manager(void * client_socket)
             // printf("Request: %s\n", req.message);
             if(req.logging_status == NOT_LOGGED)
             {
-                char username[100];
                 char password[100];
                 strcpy(username,strtok(req.message,"/"));
                 strcpy(password,strtok(NULL,"/\n"));
@@ -270,7 +270,6 @@ void* communication_manager(void * client_socket)
                             }
                             else 
                             {
-                            
                                 //Doesn't exist
                                 bzero(response_to_client,1024);
                                 strcpy(response_to_client,"The group doesn't exist\n");
@@ -279,9 +278,11 @@ void* communication_manager(void * client_socket)
 
                         }
                         //enter password
-                        else if (req.join_group_status == JOIN_GROUP)
+                        else if (req.join_group_status == JOIN)
                         {
-
+                            printf("SMTH");
+                            char *response = get_group_messages(db,group_id);
+                            sending_response(client_socket_fd,user_id,group_id,response,SUCCESS);
                         }
 
                         fflush(stdout);
@@ -289,9 +290,12 @@ void* communication_manager(void * client_socket)
                 }
                 else if (req.gr_info.group_status == IN_GROUP)
                 {
+                    
+                    //verify if we should to return the messages from db
+
                     strcpy(res.message,req.message);
                     res.status=1;
-
+                    strcpy(res.username,username);
                     save_message(db,user_id,group_id,res.message);
                     for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
                     {

@@ -32,6 +32,7 @@ struct response
 {
     int status;
     int user_id; //to set user_id in the client side
+    char username[100];
     int group_id;
     char message[1024];
 };
