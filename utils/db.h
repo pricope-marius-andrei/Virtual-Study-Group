@@ -279,3 +279,37 @@ void save_message(sqlite3 *db, int user_id, int group_id, char *message)
         fprintf(stderr, "INSERT was succesfully executed\n");
     }
 }
+
+char* get_group_messages(sqlite3 *db, int group_id)
+{
+    struct sqlite3_stmt *stmt;
+    char *errMsg = 0;
+    char *data;
+    char current_data[1024]="";
+    char query[254];
+    sprintf(query,"SELECT USERNAME,MESSAGE FROM USERS JOIN MESSAGES ON USERS.ID=MESSAGES.USER_ID WHERE GROUP_ID='%d' ORDER BY DATE,TIME",group_id);
+
+    char line[100] = "";
+    if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) == SQLITE_OK) {
+        
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            strcpy(line,sqlite3_column_text(stmt,0));
+            strcat(line, ":");
+            strcat(line, sqlite3_column_text(stmt,1));
+            strcat(current_data,line);
+        }
+
+        sqlite3_finalize(stmt);
+    } else {
+        fprintf(stderr, "Error: %s\n", sqlite3_errmsg(db));
+    }
+    data = (char*)malloc(strlen(current_data)+1);
+    if(strlen(current_data) == 0)
+    {
+        strcpy(data,"\n");
+    }
+    else {
+        strcpy(data,current_data);
+    }
+    return data;
+}
