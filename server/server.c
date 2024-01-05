@@ -229,9 +229,6 @@ void* communication_manager(void * client_socket)
                     }
                     else if (req.gr_info.group_connection == JOIN_GROUP)
                     {
-                        printf("The list of the groups:\n");
-                
-                        
                         //get list of groups
                         if(req.join_group_status == GET_LIST)
                         {
@@ -280,7 +277,6 @@ void* communication_manager(void * client_socket)
                         //enter password
                         else if (req.join_group_status == JOIN)
                         {
-                            printf("SMTH");
                             char *response = get_group_messages(db,group_id);
                             sending_response(client_socket_fd,user_id,group_id,response,SUCCESS);
                         }
@@ -292,16 +288,33 @@ void* communication_manager(void * client_socket)
                 {
                     
                     //verify if we should to return the messages from db
+                    
+                    if(strcmp(req.message,"#back\n") == 0) {
+                        res.status=0;
+                        strcpy(res.message,"You was disconneted!");
+                        for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
+                        {
+                            if(client_fds[client_fd].fd == client_socket_fd) {
+                                client_fds[client_fd].group_id = -1;
+                                fflush(stdout);
+                                break;
+                            }
+                        }
 
-                    strcpy(res.message,req.message);
-                    res.status=1;
-                    strcpy(res.username,username);
-                    save_message(db,user_id,group_id,res.message);
-                    for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
-                    {
-                        if(client_fds[client_fd].fd != client_socket_fd && client_fds[client_fd].group_id==req.group_id) {
+                         write(client_socket_fd,&res,sizeof(res));
                         
-                            write(client_fds[client_fd].fd,&res,sizeof(res));
+                    }
+                    else {
+                        strcpy(res.message,req.message);
+                        res.status=1;
+                        strcpy(res.username,username);
+                        save_message(db,user_id,group_id,res.message);
+                        for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
+                        {
+                            if(client_fds[client_fd].fd != client_socket_fd && client_fds[client_fd].group_id==req.group_id && client_fds[client_fd].group_id!=-1) {
+                            
+                                write(client_fds[client_fd].fd,&res,sizeof(res));
+                            }
                         }
                     }
                 }

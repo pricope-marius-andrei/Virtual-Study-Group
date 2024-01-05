@@ -65,13 +65,20 @@ void* read_message(void * socket_fd)
       exit(EXIT_FAILURE);
     }
     
-    printf("\n%s: %s", res.username,res.message);
-    fflush(stdout);
-    printf("%s:", username);
-    fflush(stdout);
+    if(res.status == SUCCESS) {
+      printf("\n%s: %s", res.username,res.message);
+      fflush(stdout);
+      printf("%s:", username);
+      fflush(stdout);
+    }
+    else 
+    {
+      printf("%s\n",res.message);
+    }
+    pthread_testcancel();
   }
   
-  return NULL;
+  pthread_exit(NULL);
 }
 
 void sending_request(int socket_fd, enum request_constants logging_status, enum group_status gr_status, enum group_connection gr_connection,int join_status, char *buffer)
@@ -166,8 +173,9 @@ int main (int argc, char *argv[])
     {
         if(group_status == OUT_GROUP)
         {
-          
           char connect_group_status[2];
+          bzero(connect_group_status,sizeof(connect_group_status));
+
           printf("\n(0)Create group\n(1)Join group\nEnter:");
           fflush(stdout);
           if(read(0,connect_group_status,sizeof(connect_group_status))==-1)
@@ -208,6 +216,7 @@ int main (int argc, char *argv[])
             //Print the list of the groups
             sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,GET_LIST,"");
 
+            
             res = recieving_response(socket_fd);
             printf("\nLIST OF GROUPS:\n%s", res.message);
             fflush(stdout);
@@ -246,12 +255,15 @@ int main (int argc, char *argv[])
             sprintf(group_info,"%s/%s",id_group,password);
 
             sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,SELECT_GROUP,group_info);
+            bzero(&res,sizeof(res));
             res = recieving_response(socket_fd);
 
             if(res.status == SUCCESS)
             {
               printf("\nWelcome in %s group, %s!\n\n", res.message, username);
+              fflush(stdout);
               sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,JOIN,"");
+              bzero(&res,sizeof(res));
               res = recieving_response(socket_fd);
 
               printf("%s",res.message);
@@ -262,8 +274,6 @@ int main (int argc, char *argv[])
             {
               printf("%s",res.message);
             }
-
-
           }
         }
         else if(group_status == IN_GROUP) {
@@ -279,7 +289,18 @@ int main (int argc, char *argv[])
             exit(EXIT_FAILURE);
           }
 
-          sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,buffer);
+          if(strcmp(buffer, "#back\n") == 0)
+          {
+            group_status = OUT_GROUP;
+            group_id = -1;
+            
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,buffer);
+            pthread_cancel(read_thread);
+          }
+          else 
+          {
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,buffer);
+          }
         }
     }
   }
