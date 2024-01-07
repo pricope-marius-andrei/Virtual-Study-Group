@@ -25,7 +25,8 @@ struct request {
   int group_id;
   int user_id;
   int join_group_status;
-  char message[1024];
+  int message_type;
+  char message[100];
 };
 
 struct response
@@ -34,6 +35,7 @@ struct response
     int user_id; //to set user_id in the client side
     char username[100];
     int group_id;
+    char file_content[1024];
     char message[1024];
 };
 
@@ -44,3 +46,5 @@ struct client
   int group_id;
   int fd;
 };
+
+enum message_type {FILE_UPLOAD,FILE_DOWNLOAD,BACK,QUIT,TEXT_TRANSFER};

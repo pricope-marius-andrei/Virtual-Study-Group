@@ -33,7 +33,6 @@ int create_group(sqlite3 *db, int admin_id, char *name, char *password)
 
     char id[1024];
     int unique_id = get_unique_id(db);
-    printf("Unique id: %d\n",unique_id);
     sprintf(id, "%d", unique_id);
 
     char adm_id[1024];
@@ -49,9 +48,6 @@ int create_group(sqlite3 *db, int admin_id, char *name, char *password)
     strcat(query,"','");
     strcat(query,password);
     strcat(query,"');");
-
-
-    printf("Query: %s\n", query);
 
     int response = sqlite3_exec(db,query,NULL,0,&err_msg);
 
@@ -96,6 +92,24 @@ int verify_group_exist(sqlite3 *db, char* id_group ,char *password)
     strcat(query,"' AND PASSWORD='");
     strcat(query,password);
     strcat(query,"';");
+
+    int response = sqlite3_exec(db,query,count_rows,&rows, &errMsg);
+
+    if(response)
+    {
+        perror("Get rows count error");
+        exit(EXIT_FAILURE);
+    }
+
+    return rows;
+}
+
+int verify_file_exist(sqlite3 *db, int group_id, char *file_name)
+{
+    char *errMsg = 0;
+    char query[100];
+    int rows = 0;
+    sprintf(query,"SELECT * FROM FILES WHERE GROUP_ID='%d' AND FILE_NAME='%s';",group_id,file_name);
 
     int response = sqlite3_exec(db,query,count_rows,&rows, &errMsg);
 
@@ -200,9 +214,9 @@ void update_users_field(sqlite3 *db , char* field, int user_id, char*value_field
 
     strcpy(query,"UPDATE USERS set ");
     strcat(query,field);
-    strcat(query,"=");
+    strcat(query,"='");
     strcat(query,value_field);
-    strcat(query," WHERE ID='");
+    strcat(query,"' WHERE ID='");
     strcat(query,uid);
     strcat(query,"';");
 
@@ -230,7 +244,6 @@ int get_field_value(sqlite3 *db, const char *condition, const char* field, const
     strcat(query,condition);
     strcat(query,";");
 
-    printf("Query: %s\n", query);
 
     if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) == SQLITE_OK) {
         if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -270,6 +283,22 @@ void save_message(sqlite3 *db, int user_id, int group_id, char *message)
     char query[254];
 
     sprintf(query,"INSERT INTO MESSAGES (USER_ID,GROUP_ID,MESSAGE,DATE,TIME) VALUES('%d','%d','%s',date(),time());",user_id,group_id,message);
+
+    int response = sqlite3_exec(db,query,NULL,0,&errMsg);
+    if( response ) {
+        fprintf(stderr, "Error : %s\n", sqlite3_errmsg(db));
+    } 
+    else {
+        fprintf(stderr, "INSERT was succesfully executed\n");
+    }
+}
+
+void save_file(sqlite3 *db, int group_id, int user_id, char *file_name)
+{
+    char *errMsg = 0;
+    char query[254];
+
+    sprintf(query,"INSERT INTO FILES (FILE_NAME,GROUP_ID,USER_ID) VALUES('%s','%d','%d');",file_name,group_id,user_id);
 
     int response = sqlite3_exec(db,query,NULL,0,&errMsg);
     if( response ) {
