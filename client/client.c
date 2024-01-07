@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include "../utils/constants.h"
 #include <pthread.h>
+#include <fcntl.h>
 
 int port;
 int is_connected = NOT_LOGGED;
@@ -81,7 +82,7 @@ void* read_message(void * socket_fd)
   pthread_exit(NULL);
 }
 
-void sending_request(int socket_fd, enum request_constants logging_status, enum group_status gr_status, enum group_connection gr_connection,int join_status, char *buffer)
+void sending_request(int socket_fd, enum request_constants logging_status, enum group_status gr_status, enum group_connection gr_connection,int join_status, enum message_type type, char *buffer)
 {
   struct request req;
   req.user_id = user_id;
@@ -90,6 +91,7 @@ void sending_request(int socket_fd, enum request_constants logging_status, enum 
   req.gr_info.group_status = gr_status;
   req.gr_info.group_connection = gr_connection;
   req.join_group_status = join_status;
+  req.message_type = type;
   strcpy(req.message, buffer);
   if(write(socket_fd,&req, sizeof(req)) < 0)
   {
@@ -152,7 +154,7 @@ int main (int argc, char *argv[])
       }
 
       //Send the username and the password 
-      sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,NONE,-1,msg);
+      sending_request(socket_fd,NOT_LOGGED,OUT_GROUP,NONE,-1,-1,msg);
 
       //Recieving the response from the server
       res = recieving_response(socket_fd);
@@ -197,7 +199,7 @@ int main (int argc, char *argv[])
             }
 
 
-            sending_request(socket_fd,LOGGED,OUT_GROUP,CREATE_GROUP,-1,group_info);
+            sending_request(socket_fd,LOGGED,OUT_GROUP,CREATE_GROUP,-1,-1,group_info);
             
             res = recieving_response(socket_fd);
 
@@ -214,7 +216,7 @@ int main (int argc, char *argv[])
           else if (atoi(group_connection) == JOIN_GROUP)
           {
             //Print the list of the groups
-            sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,GET_LIST,"");
+            sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,GET_LIST,-1,"");
 
             
             res = recieving_response(socket_fd);
@@ -254,7 +256,7 @@ int main (int argc, char *argv[])
             }
             sprintf(group_info,"%s/%s",id_group,password);
 
-            sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,SELECT_GROUP,group_info);
+            sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,SELECT_GROUP,-1,group_info);
             bzero(&res,sizeof(res));
             res = recieving_response(socket_fd);
 
@@ -262,7 +264,7 @@ int main (int argc, char *argv[])
             {
               printf("\nWelcome in %s group, %s!\n\n", res.message, username);
               fflush(stdout);
-              sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,JOIN,"");
+              sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,JOIN,-1,"");
               bzero(&res,sizeof(res));
               res = recieving_response(socket_fd);
 
@@ -289,17 +291,52 @@ int main (int argc, char *argv[])
             exit(EXIT_FAILURE);
           }
 
-          if(strcmp(buffer, "#back\n") == 0)
+          if(strstr(buffer,"#download:") != NULL)
+          {
+            strtok(buffer,":");
+            char *download_config = strtok(NULL,"\n");
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,FILE_DOWNLOAD,download_config);
+
+            res = recieving_response(socket_fd);
+
+            if(res.status == SUCCESS)
+            {
+              char dest[1024];
+
+              strcpy(dest,res.message);
+              printf("The file was downloaded!\n");
+              fflush(stdout);
+
+              int file = creat(dest,O_WRONLY|0666);
+
+              for (int i = 0; i < strlen(res.file_content); i++)
+              {
+                write(file,&res.file_content[i],sizeof(char));
+              }
+              
+            }
+            else 
+            {
+              printf("The file was not downloaded!\n");
+            }
+          } 
+          else if(strstr(buffer,"#file:") != NULL)
+          {
+            strtok(buffer,":");
+            char *file_path = strtok(NULL,"\n");
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,FILE_UPLOAD,file_path);
+          }
+          else if (strcmp(buffer, "#back\n") == 0)
           {
             group_status = OUT_GROUP;
             group_id = -1;
             
-            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,buffer);
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,BACK,buffer);
             pthread_cancel(read_thread);
           }
           else 
           {
-            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,buffer);
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,TEXT_TRANSFER,buffer);
           }
         }
     }

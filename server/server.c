@@ -20,6 +20,7 @@
 #include "../utils/db.h"
 #include "../utils/constants.h"
 #include <pthread.h>
+#include <fcntl.h>
 
 struct client client_fds[100];
 int client_fds_lenght = 0;
@@ -112,13 +113,14 @@ struct request reaciving_request(int client_fd)
     return req;
 }
 
-void sending_response(int client_fd, int user_id, int group_id, char *response, int response_status)
+void sending_response(int client_fd, int user_id, int group_id, char *response, char *file_content, int response_status)
 {
     struct response res;
     strcpy(res.message,response);
     res.status=response_status;
     res.user_id = user_id;
     res.group_id = group_id;
+    strcpy(res.file_content,file_content);
 
     printf("Sending...\n");
 
@@ -168,8 +170,8 @@ void* communication_manager(void * client_socket)
                     sprintf(condition, "WHERE USERNAME='%s'", username);
                     logged_status = get_field_value(db,condition,"STATUS","USERS");
                     if(logged_status == 0) {
-                        update_users_field(db,"STATUS",user_id,"1");
                         user_id = get_field_value(db,condition, "ID", "USERS");
+                        update_users_field(db,"STATUS",user_id,"1");
                         printf("User with id: %d was connected!\n",user_id);
                         
                         
@@ -178,13 +180,13 @@ void* communication_manager(void * client_socket)
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,username);
 
-                        sending_response(client_socket_fd,user_id,-1,response_to_client,SUCCESS);
+                        sending_response(client_socket_fd,user_id,-1,response_to_client, "",SUCCESS);
                     }
                     else 
                     {
                         bzero(response_to_client,1024);
                         strcpy(response_to_client,"The user already logged!\n");
-                        sending_response(client_socket_fd,user_id,-1,response_to_client,FAILED);
+                        sending_response(client_socket_fd,user_id,-1,response_to_client,"",FAILED);
                     }
                 }
                 else {
@@ -192,7 +194,7 @@ void* communication_manager(void * client_socket)
                     //Doesn't exist
                     bzero(response_to_client,1024);
                     strcpy(response_to_client,"The user doesn't exist\n");
-                    sending_response(client_socket_fd,user_id,-1,response_to_client,FAILED);
+                    sending_response(client_socket_fd,user_id,-1,response_to_client, "",FAILED);
                 }
             }
             else if(req.logging_status == LOGGED)
@@ -224,7 +226,7 @@ void* communication_manager(void * client_socket)
                         
 
                         strcpy(response_to_client,"The group was succesfully created!\n");
-                        sending_response(client_socket_fd,user_id,group_id,response_to_client,SUCCESS);
+                        sending_response(client_socket_fd,user_id,group_id,response_to_client,"",SUCCESS);
                         fflush(stdout);
                     }
                     else if (req.gr_info.group_connection == JOIN_GROUP)
@@ -234,7 +236,7 @@ void* communication_manager(void * client_socket)
                         {
                             char *group_list = select_table(db,"SELECT * FROM GROUPS;");
                             printf("Groups: %s", group_list);
-                            sending_response(client_socket_fd,user_id,-1,group_list,SUCCESS);
+                            sending_response(client_socket_fd,user_id,-1,group_list,"",SUCCESS);
                         }
                         //select a id_group
                         else if (req.join_group_status == SELECT_GROUP)
@@ -254,7 +256,7 @@ void* communication_manager(void * client_socket)
                                 //Succesfull response 
                                 bzero(response_to_client,1024);
                                 strcpy(response_to_client,id_group);
-                                sending_response(client_socket_fd,-1,atoi(id_group),response_to_client,SUCCESS);
+                                sending_response(client_socket_fd,-1,atoi(id_group),response_to_client, "",SUCCESS);
                                 group_id = atoi(id_group);
 
                                 for(int client_fd = 0 ; client_fd < client_fds_lenght + 1; client_fd++)
@@ -270,7 +272,7 @@ void* communication_manager(void * client_socket)
                                 //Doesn't exist
                                 bzero(response_to_client,1024);
                                 strcpy(response_to_client,"The group doesn't exist\n");
-                                sending_response(client_socket_fd,-1,-1,response_to_client,FAILED);
+                                sending_response(client_socket_fd,-1,-1,response_to_client,"",FAILED);
                             }
 
                         }
@@ -278,7 +280,7 @@ void* communication_manager(void * client_socket)
                         else if (req.join_group_status == JOIN)
                         {
                             char *response = get_group_messages(db,group_id);
-                            sending_response(client_socket_fd,user_id,group_id,response,SUCCESS);
+                            sending_response(client_socket_fd,user_id,group_id,response,"",SUCCESS);
                         }
 
                         fflush(stdout);
@@ -288,8 +290,13 @@ void* communication_manager(void * client_socket)
                 {
                     
                     //verify if we should to return the messages from db
-                    
-                    if(strcmp(req.message,"#back\n") == 0) {
+
+                    if(req.message_type == QUIT) 
+                    {
+
+                    }
+                    if(req.message_type == BACK)
+                    {
                         res.status=0;
                         strcpy(res.message,"You was disconneted!");
                         for(int client_fd = 0 ; client_fd < client_fds_lenght; client_fd++)
@@ -304,8 +311,46 @@ void* communication_manager(void * client_socket)
                          write(client_socket_fd,&res,sizeof(res));
                         
                     }
-                    else {
-                        strcpy(res.message,req.message);
+                    else if(req.message_type == TEXT_TRANSFER || req.message_type == FILE_UPLOAD)
+                    {
+
+                        if(req.message_type == FILE_UPLOAD)
+                        {
+                            //create a file in the server folder
+                            char path[1024];
+                            strcpy(path,req.message);
+                            int file = open(path,O_RDONLY);
+        
+                            char content[1024];
+                            int lenght = 0;
+                            char ch;
+                            while (read(file,&ch,sizeof(ch)) != 0)
+                            {
+                                content[lenght++] = ch;
+                            };
+                            content[lenght] = '\0';
+
+                            char *file_name = strrchr(path,'/');
+                            file_name += 1;
+                            file_name[strlen(file_name)] = '\0';
+
+                            //save in the db the file_name
+                            save_file(db,group_id,user_id,file_name);
+
+                            int save_file = creat(file_name,O_WRONLY);
+
+                            for (int i = 0; i < strlen(content); i++)
+                            {
+                                write(save_file,&content[i],sizeof(char));
+                            }
+
+                            sprintf(res.message,"file_name:\"%s\" (#download:file_name,destination)\n",file_name);
+                        }
+                        else 
+                        {
+                            strcpy(res.message,req.message);
+                        }
+
                         res.status=1;
                         strcpy(res.username,username);
                         save_message(db,user_id,group_id,res.message);
@@ -315,6 +360,52 @@ void* communication_manager(void * client_socket)
                             
                                 write(client_fds[client_fd].fd,&res,sizeof(res));
                             }
+                        }
+                    }
+                    else if(req.message_type == FILE_DOWNLOAD)
+                    {
+                        printf("SMTH");
+                        char request[1024];
+                        strcpy(request,req.message);
+
+                        char *file_name;
+                        char *destination;
+
+                        file_name = strtok(request,",");
+                        destination = strtok(NULL, "\n");
+
+                        printf("FILE_NAME: %s, DEST: %s GROUP_ID: %d\n",file_name,destination,group_id);
+                        
+                        //search the file in db
+                        int file_exist = verify_file_exist(db,group_id,file_name);
+
+                        printf("Status: %d", file_exist);
+                        fflush(stdout);
+                        // //if i found the file, get the content and return to the client
+                        if(file_exist > 0) {
+                            char path[1024];
+                            sprintf(path,"%s/%s",destination,file_name);
+                            printf("PATH: %s\n", path);
+                            fflush(stdout);
+
+                            int file = open(file_name,O_RDONLY);
+
+                            char content[1024];
+                            int lenght = 0;
+                            char ch;
+                            while (read(file,&ch,sizeof(ch)) != 0)
+                            {
+                                content[lenght++] = ch;
+                            };
+                            content[lenght] = '\0';
+                            
+                            sending_response(client_socket_fd,user_id,group_id,path,content,SUCCESS);
+                        }
+                        else 
+                        {
+                            printf("The file was not find!\n");
+                            fflush(stdout);
+                            sending_response(client_socket_fd,-1,-1,"The file was not find!","",FAILED);
                         }
                     }
                 }
