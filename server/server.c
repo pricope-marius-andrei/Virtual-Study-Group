@@ -1,12 +1,3 @@
-/*
-    Steps:
-    1. create socket
-    2. configure the socket
-    3. do binding
-    4. listen the connections
-    5. accept the new client
-    6. get the input from the client and sent a output to it
-*/
 #include <error.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -36,8 +27,6 @@ void remove_client_fd(int client_fd)
         }
     }
 
-    printf("Remove index:%d\n",remove_index);
-
     for (int i = remove_index; i < client_fds_lenght - 1; i++)
     {
         client_fds[i] = client_fds[i+1];
@@ -45,10 +34,6 @@ void remove_client_fd(int client_fd)
 
     client_fds_lenght--;
     close(client_fd);
-    // for (int i = 0; i < client_fds_lenght; i++)
-    // {
-    //     printf("Client: %d\n", client_fds[i].fd);
-    // }
 }
 
 int fd_exist(int client_fd)
@@ -124,8 +109,6 @@ struct request reaciving_request(int client_fd)
     int bytes;
     if((bytes = read(client_fd,&req,sizeof(req))) <=0)
     {
-        //remove the client fd from the list
-        // remove_client_fd(client_fd);
         strcpy(req.message,"false");
     }
 
@@ -168,7 +151,6 @@ void* communication_manager(void * client_socket)
     while(1) {
         if(client_socket_fd > 0) {
             req = reaciving_request(client_socket_fd);
-            printf("Lenght: %d\n", client_fds_lenght);
 
             // printf("Request: %s\n", req.message);
             if(req.logging_status == NOT_LOGGED)
@@ -193,6 +175,7 @@ void* communication_manager(void * client_socket)
                         user_id = get_field_value(db,condition, "ID", "USERS");
                         update_users_field(db,"STATUS",user_id,"1");
                         client_fds[client_fds_lenght++].fd = client_socket_fd;
+
                         printf("User with id: %d was connected!\n",user_id);
                         
                         
@@ -228,9 +211,6 @@ void* communication_manager(void * client_socket)
                         strcpy(name,strtok(req.message,"/"));
                         strcpy(password,strtok(NULL,"/\n"));
 
-                        printf("Group name: %s, password of group: %s\n",name,password);
-                        fflush(stdout);
-
                         group_id = create_group(db,user_id,name,password);
 
 
@@ -238,7 +218,6 @@ void* communication_manager(void * client_socket)
                         {
                             if(client_fds[client_fd].fd == client_socket_fd ) {
                                 client_fds[client_fd].group_id = group_id;
-                                printf("Group id %d\n",client_fds[client_fd].group_id);
                             }
                         }
 
@@ -255,7 +234,6 @@ void* communication_manager(void * client_socket)
                         if(req.join_group_status == GET_LIST)
                         {
                             char *group_list = select_table(db,"SELECT * FROM GROUPS;");
-                            printf("Groups: %s", group_list);
                             sending_response(client_socket_fd,user_id,-1,group_list,"",SUCCESS);
                         }
                         //select a id_group
@@ -276,7 +254,9 @@ void* communication_manager(void * client_socket)
                                 //Succesfull response 
                                 bzero(response_to_client,sizeof(response_to_client));
                                 strcpy(response_to_client,id_group);
+                                
                                 printf("Response_to_client: %s\n",response_to_client);
+                                
                                 sending_response(client_socket_fd,-1,atoi(id_group),response_to_client, " ",SUCCESS);
                                 group_id = atoi(id_group);
 
@@ -284,7 +264,6 @@ void* communication_manager(void * client_socket)
                                 {
                                     if(client_fds[client_fd].fd == client_socket_fd) {
                                         client_fds[client_fd].group_id = atoi(id_group);
-                                        printf("Id group: %d\n",client_fds[client_fd].group_id);
                                     }
                                 }
                             }
@@ -324,7 +303,6 @@ void* communication_manager(void * client_socket)
                             {
                                 char msg[1024];
                                 sprintf(msg,"%s left the chat!\n",username);
-                                printf("Res:%s\n",msg);
                                 strcpy(res.message, msg);
                                 res.status = SUCCESS;
 
@@ -338,7 +316,6 @@ void* communication_manager(void * client_socket)
                                 client_fds[client_fd].group_id = -1;
                             }
                         }
-                        // sending_response(client_socket_fd,-1,-1,"You was disconneted!","",SUCCESS);
                         
                     }
                     else if(req.message_type == TEXT_TRANSFER || req.message_type == FILE_UPLOAD)
@@ -394,7 +371,6 @@ void* communication_manager(void * client_socket)
                     }
                     else if(req.message_type == FILE_DOWNLOAD)
                     {
-                        printf("SMTH");
                         char request[1024];
                         strcpy(request,req.message);
 
@@ -444,25 +420,11 @@ void* communication_manager(void * client_socket)
 
 int main()
 {
-    //Test
     sqlite3 *db = open_db("users.db"); 
-
-    // create_table(db,"CREATE TABLE GROUPS("\
-    //     "ID_GROUP INT PRIMARY KEY NOT NULL," \
-    //     "NAME VARCHAR(36) NOT NULL," \
-    //     "PASSWORD VARCHAR(36) NOT NULL);"
-    // );
-
-    // delete_account(db,"DROP TABLE USERS");
 
     update_users_field(db,"STATUS",0, "0");
     update_users_field(db,"STATUS",1, "0");
     update_users_field(db,"STATUS",2, "0");
-
-    // char*test = select_table(db, "SELECT * FROM GROUPS;");
-    // printf("List: %s", test);
-    //Test
-
 
     //Setup the socket
     int server_socket_fd = setup_socket();
@@ -478,7 +440,7 @@ int main()
         int client = accept(server_socket_fd,(struct sockaddr *)&client_address,&len);
         pthread_create(&thread,NULL,communication_manager, &client);
     }
-    printf("Ok!");
+
     close(server_socket_fd);
     return 0;
 }
