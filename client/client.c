@@ -11,6 +11,7 @@
 #include "../utils/constants.h"
 #include <pthread.h>
 #include <fcntl.h>
+#include <signal.h>
 
 int port;
 int ok = 0;
@@ -61,18 +62,18 @@ void* read_message(void * socket_fd)
 {
   pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
   pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
-  sleep(6);
   char buffer[1024];
   struct response res;
-  while (1)
+  while (ok == 0)
   {
     pthread_testcancel();
+    
     if(read(*(int *)socket_fd,&res,sizeof(res)) <= 0)
     {
       perror("\nError: The client was disconnected!");
       exit(EXIT_FAILURE);
     }
-    
+
     if(res.status == SUCCESS) {
       printf("\n%s:%s", res.username,res.message);
       fflush(stdout);
@@ -144,7 +145,9 @@ int main (int argc, char *argv[])
 
   pthread_t read_thread;
   pthread_t write_thread;
+  pthread_t join_group;
 
+  pthread_mutex_init(&mutex,NULL);
 
   while (running)
   {
@@ -199,6 +202,8 @@ int main (int argc, char *argv[])
 
           if(atoi(group_connection) == CREATE_GROUP)
           {
+            sleep(2);
+            ok = 1;
             char group_info[100];
             printf("Enter group name/password:");
             fflush(stdout);
@@ -216,15 +221,21 @@ int main (int argc, char *argv[])
             {
               group_id = res.group_id;
               group_status = IN_GROUP;
+              printf("The group %d was created successfully!\n", group_id);
             }
             else 
             {
               printf("%s\n",res.message);
             }
+
+            sleep(2);
+            ok = 0;
           }
           else if (atoi(group_connection) == JOIN_GROUP)
           {
             //Print the list of the groups
+            sleep(1);
+            ok = 1;
             sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,GET_LIST,-1,"");
 
             
@@ -236,7 +247,8 @@ int main (int argc, char *argv[])
             char id_group[100];
             strcpy(id_group, " ");
             
-
+            sleep(1);
+            ok = 1;
             while (strcmp(id_group," ") == 0)
             {
               printf("Select ID of a group: ");
@@ -258,7 +270,7 @@ int main (int argc, char *argv[])
 
             printf("ENTER PASSWORD:");
             fflush(stdout);
-            
+
             char password[100];
             if(read(0,password,sizeof(password))==-1)
             {
@@ -266,7 +278,6 @@ int main (int argc, char *argv[])
             }
 
             sprintf(group_info,"%s/%s",id_group,password);
-            printf("Group_info: %s",group_info);
 
             pthread_mutex_lock(&mutex);
 
@@ -287,6 +298,8 @@ int main (int argc, char *argv[])
               fflush(stdout);
               group_status = IN_GROUP;
               group_id = res.group_id;
+              sleep(2);
+              ok = 0;
             }
             else 
             {
@@ -309,6 +322,9 @@ int main (int argc, char *argv[])
 
           if(strstr(buffer,"#download:") != NULL)
           {
+            ok = 1;
+            sleep(5);
+            ok = 1;
             strtok(buffer,":");
             char *download_config = strtok(NULL,"\n");
             sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,FILE_DOWNLOAD,download_config);
@@ -334,6 +350,8 @@ int main (int argc, char *argv[])
             {
               printf("The file was not downloaded!\n");
             }
+            sleep(2);
+            ok = 0;
           } 
           else if(strstr(buffer,"#file:") != NULL)
           {
@@ -346,36 +364,33 @@ int main (int argc, char *argv[])
             group_status = OUT_GROUP;
             group_id = -1;
             pthread_cancel(read_thread);
+            sleep(3);
+            ok = 1;
             sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,BACK,buffer);
-
-            // res = recieving_response(socket_fd);
-            // printf("%s\n", res.message);
-            // fflush(stdout);
-            // if(res.status == SUCCESS)
-            // {
-            //   pthread_cancel(read_thread);
-            //   group_status = OUT_GROUP;
-            //   group_id = -1;
-            // }
-            // else 
-            // {
-            //   printf("The command didn't work!\n");
-            // }
           }
           else if(strcmp(buffer, "#quit\n") == 0)
           {
+            ok = 1;
+            sleep(5);
             sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,QUIT,buffer);
 
             res = recieving_response(socket_fd);
             if(res.status == SUCCESS)
             {
-              printf("It works\n");
               running = 0;
               exit(EXIT_SUCCESS);
             }
           }
           else 
           {
+            ok = 0;
+            if(ok == 1)
+            {
+              sleep(3);
+              ok = 0;
+            }
+            else 
+              sleep(1);
             sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,TEXT_TRANSFER,buffer);
           }
         }

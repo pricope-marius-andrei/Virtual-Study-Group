@@ -168,7 +168,6 @@ void* communication_manager(void * client_socket)
     while(1) {
         if(client_socket_fd > 0) {
             req = reaciving_request(client_socket_fd);
-            printf("Lenght: %d\n", client_fds_lenght);
 
             // printf("Request: %s\n", req.message);
             if(req.logging_status == NOT_LOGGED)
@@ -444,25 +443,11 @@ void* communication_manager(void * client_socket)
 
 int main()
 {
-    //Test
     sqlite3 *db = open_db("users.db"); 
-
-    // create_table(db,"CREATE TABLE GROUPS("\
-    //     "ID_GROUP INT PRIMARY KEY NOT NULL," \
-    //     "NAME VARCHAR(36) NOT NULL," \
-    //     "PASSWORD VARCHAR(36) NOT NULL);"
-    // );
-
-    // delete_account(db,"DROP TABLE USERS");
 
     update_users_field(db,"STATUS",0, "0");
     update_users_field(db,"STATUS",1, "0");
     update_users_field(db,"STATUS",2, "0");
-
-    // char*test = select_table(db, "SELECT * FROM GROUPS;");
-    // printf("List: %s", test);
-    //Test
-
 
     //Setup the socket
     int server_socket_fd = setup_socket();
@@ -478,7 +463,7 @@ int main()
         int client = accept(server_socket_fd,(struct sockaddr *)&client_address,&len);
         pthread_create(&thread,NULL,communication_manager, &client);
     }
-    printf("Ok!");
+    
     close(server_socket_fd);
     return 0;
 }
