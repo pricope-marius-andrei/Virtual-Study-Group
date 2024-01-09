@@ -13,6 +13,9 @@
 #include <fcntl.h>
 
 int port;
+int ok = 0;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 int is_connected = NOT_LOGGED;
 int group_status = OUT_GROUP;
 int group_id = -1;
@@ -56,10 +59,14 @@ void connect_to_server(int server_socket_fd, char* ip_adress, int port)
 //read data from the server
 void* read_message(void * socket_fd)
 {
+  pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+  pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
+  sleep(6);
   char buffer[1024];
   struct response res;
   while (1)
   {
+    pthread_testcancel();
     if(read(*(int *)socket_fd,&res,sizeof(res)) <= 0)
     {
       perror("\nError: The client was disconnected!");
@@ -67,7 +74,7 @@ void* read_message(void * socket_fd)
     }
     
     if(res.status == SUCCESS) {
-      printf("\n%s: %s", res.username,res.message);
+      printf("\n%s:%s", res.username,res.message);
       fflush(stdout);
       printf("%s:", username);
       fflush(stdout);
@@ -76,9 +83,11 @@ void* read_message(void * socket_fd)
     {
       printf("%s\n",res.message);
     }
-    pthread_testcancel();
   }
-  
+
+  // if(ok == 1)
+  //   printf("SALUT!\n");
+  // pthread_mutex_unlock(&mutex);
   pthread_exit(NULL);
 }
 
@@ -162,6 +171,7 @@ int main (int argc, char *argv[])
       if(res.status == SUCCESS)
       {
         printf("\nWelcome %s!\n", res.message);
+        fflush(stdout);
         strcpy(username,res.message);
         is_connected = LOGGED;
         user_id = res.user_id;
@@ -198,7 +208,6 @@ int main (int argc, char *argv[])
               perror("Reading group_info error");
             }
 
-
             sending_request(socket_fd,LOGGED,OUT_GROUP,CREATE_GROUP,-1,-1,group_info);
             
             res = recieving_response(socket_fd);
@@ -224,7 +233,8 @@ int main (int argc, char *argv[])
             fflush(stdout);
 
             //Select a group id
-            char id_group[100] = " \0";
+            char id_group[100];
+            strcpy(id_group, " ");
             
 
             while (strcmp(id_group," ") == 0)
@@ -254,12 +264,17 @@ int main (int argc, char *argv[])
             {
               perror("Reading group_info error");
             }
+
             sprintf(group_info,"%s/%s",id_group,password);
+            printf("Group_info: %s",group_info);
+
+            pthread_mutex_lock(&mutex);
 
             sending_request(socket_fd,LOGGED,OUT_GROUP,JOIN_GROUP,SELECT_GROUP,-1,group_info);
             bzero(&res,sizeof(res));
-            res = recieving_response(socket_fd);
-
+            res = recieving_response(socket_fd); 
+            
+            pthread_mutex_unlock(&mutex);
             if(res.status == SUCCESS)
             {
               printf("\nWelcome in %s group, %s!\n\n", res.message, username);
@@ -269,12 +284,13 @@ int main (int argc, char *argv[])
               res = recieving_response(socket_fd);
 
               printf("%s",res.message);
+              fflush(stdout);
               group_status = IN_GROUP;
               group_id = res.group_id;
             }
             else 
             {
-              printf("%s",res.message);
+              printf("Response:%s",res.message);
             }
           }
         }
@@ -313,7 +329,6 @@ int main (int argc, char *argv[])
               {
                 write(file,&res.file_content[i],sizeof(char));
               }
-              
             }
             else 
             {
@@ -330,9 +345,34 @@ int main (int argc, char *argv[])
           {
             group_status = OUT_GROUP;
             group_id = -1;
-            
-            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,BACK,buffer);
             pthread_cancel(read_thread);
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,BACK,buffer);
+
+            // res = recieving_response(socket_fd);
+            // printf("%s\n", res.message);
+            // fflush(stdout);
+            // if(res.status == SUCCESS)
+            // {
+            //   pthread_cancel(read_thread);
+            //   group_status = OUT_GROUP;
+            //   group_id = -1;
+            // }
+            // else 
+            // {
+            //   printf("The command didn't work!\n");
+            // }
+          }
+          else if(strcmp(buffer, "#quit\n") == 0)
+          {
+            sending_request(socket_fd,LOGGED,IN_GROUP,NONE,-1,QUIT,buffer);
+
+            res = recieving_response(socket_fd);
+            if(res.status == SUCCESS)
+            {
+              printf("It works\n");
+              running = 0;
+              exit(EXIT_SUCCESS);
+            }
           }
           else 
           {
