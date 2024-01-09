@@ -224,9 +224,6 @@ void update_users_field(sqlite3 *db , char* field, int user_id, char*value_field
     if( response ) {
         fprintf(stderr, "Error : %s\n", sqlite3_errmsg(db));
     } 
-    else {
-        fprintf(stderr, "UPDATE status was succesfully executed\n");
-    }
 }
 
 int get_field_value(sqlite3 *db, const char *condition, const char* field, const char* table_name)

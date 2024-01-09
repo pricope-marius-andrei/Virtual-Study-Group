@@ -86,9 +86,6 @@ void* read_message(void * socket_fd)
     }
   }
 
-  // if(ok == 1)
-  //   printf("SALUT!\n");
-  // pthread_mutex_unlock(&mutex);
   pthread_exit(NULL);
 }
 
@@ -125,9 +122,8 @@ struct response recieving_response(int socket_fd)
 
 int main (int argc, char *argv[])
 {
-  char msg[100];		//
+  char msg[100];		
 
-  /* Connect parameters */
   if (argc != 3)
   {
     printf ("SINTAXA: %s <adresa_server> <port>\n", argv[0]);
@@ -144,8 +140,6 @@ int main (int argc, char *argv[])
   int running = 1;
 
   pthread_t read_thread;
-  pthread_t write_thread;
-  pthread_t join_group;
 
   pthread_mutex_init(&mutex,NULL);
 
@@ -259,8 +253,6 @@ int main (int argc, char *argv[])
                 perror("Reading group_info error");
               }
 
-              //to do 
-              //verify if the id_group exist
               break;
             }
 
